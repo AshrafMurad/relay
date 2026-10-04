@@ -16,4 +16,7 @@ export interface ServerToClientEvents {
 
 export type InterServerEvents = Record<string, never>;
 
-export type SocketData = Record<string, never>;
+export interface SocketData {
+  userId?: string;
+  email?: string;
+}

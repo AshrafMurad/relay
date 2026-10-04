@@ -6,3 +6,129 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum WorkspaceMemberStatus {
+  ACTIVE
+  REMOVED
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  name          String
+  image         String?
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  accounts             Account[]
+  sessions             Session[]
+  createdWorkspaces    Workspace[]           @relation("WorkspaceCreator")
+  memberships          WorkspaceMember[]     @relation("WorkspaceMemberUser")
+  removedMemberships   WorkspaceMember[]     @relation("WorkspaceMemberRemover")
+  sentInvitations      WorkspaceInvitation[] @relation("InvitationSender")
+  acceptedInvitations  WorkspaceInvitation[] @relation("InvitationAcceptedUser")
+}
+
+model Account {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  providerId   String
+  accountId    String
+  password     String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime @db.Timestamptz(6)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  valueHash  String   @unique
+  expiresAt  DateTime @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([identifier])
+  @@index([expiresAt])
+}
+
+model Workspace {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  imageUrl    String?
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  createdBy   User                  @relation("WorkspaceCreator", fields: [createdById], references: [id])
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+}
+
+model WorkspaceMember {
+  id          String                @id @default(uuid()) @db.Uuid
+  workspaceId String                @db.Uuid
+  userId      String                @db.Uuid
+  role        WorkspaceRole
+  status      WorkspaceMemberStatus @default(ACTIVE)
+  joinedAt    DateTime              @default(now()) @db.Timestamptz(6)
+  removedAt   DateTime?             @db.Timestamptz(6)
+  removedById String?               @db.Uuid
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation("WorkspaceMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  removedBy User?     @relation("WorkspaceMemberRemover", fields: [removedById], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@index([userId, status])
+  @@index([workspaceId, status])
+}
+
+model WorkspaceInvitation {
+  id             String        @id @default(uuid()) @db.Uuid
+  workspaceId    String        @db.Uuid
+  email          String
+  role           WorkspaceRole
+  tokenHash      String        @unique
+  invitedById    String        @db.Uuid
+  acceptedById   String?       @db.Uuid
+  expiresAt      DateTime      @db.Timestamptz(6)
+  acceptedAt     DateTime?     @db.Timestamptz(6)
+  revokedAt      DateTime?     @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy  User      @relation("InvitationSender", fields: [invitedById], references: [id])
+  acceptedBy User?     @relation("InvitationAcceptedUser", fields: [acceptedById], references: [id])
+
+  @@index([workspaceId])
+  @@index([email])
+}

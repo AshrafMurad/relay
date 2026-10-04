@@ -6,6 +6,7 @@ export interface DependencyProbe {
 }
 
 export interface Database extends DependencyProbe {
+  prisma: PrismaClient;
   connect(): Promise<void>;
   disconnect(): Promise<void>;
 }
@@ -15,6 +16,7 @@ export function createDatabase(connectionString: string): Database {
   const prisma = new PrismaClient({ adapter });
 
   return {
+    prisma,
     async connect() {
       await prisma.$connect();
       await prisma.$queryRaw`SELECT 1`;

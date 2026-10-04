@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 
 import type { ApiErrorResponse } from "../contracts/api.js";
+import { ApiError } from "../lib/api-error.js";
 import type { Logger } from "../lib/logger.js";
 
 export const notFoundHandler: RequestHandler = (request, response) => {
@@ -18,6 +19,20 @@ export const notFoundHandler: RequestHandler = (request, response) => {
 export function createErrorHandler(logger: Logger): ErrorRequestHandler {
   return (error: unknown, request, response, next) => {
     void next;
+
+    if (error instanceof ApiError) {
+      const body: ApiErrorResponse = {
+        error: {
+          code: error.code,
+          message: error.message,
+          requestId: request.id === undefined ? undefined : String(request.id),
+        },
+      };
+
+      response.status(error.statusCode).json(body);
+      return;
+    }
+
     logger.error({ err: error, requestId: request.id }, "Unhandled API error");
 
     const body: ApiErrorResponse = {

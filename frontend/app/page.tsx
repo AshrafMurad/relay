@@ -1,5 +1,5 @@
-import { RelayAppShell } from "@/components/relay/app-shell"
+import { SprintOneApp } from "@/components/relay/sprint-one-app"
 
 export default function Home() {
-  return <RelayAppShell />
+  return <SprintOneApp />
 }

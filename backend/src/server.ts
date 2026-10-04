@@ -25,7 +25,7 @@ export async function startServer(source: NodeJS.ProcessEnv = process.env) {
   const httpServer = createServer(app);
   httpServer.requestTimeout = 15_000;
   httpServer.headersTimeout = 16_000;
-  const io = createSocketServer(httpServer, environment, logger);
+  const io = createSocketServer(httpServer, environment, logger, database.prisma);
 
   try {
     try {

@@ -10,11 +10,15 @@ import type { IncomingMessage } from "node:http";
 import type { Environment } from "./config/env.js";
 import type { DependencyProbe } from "./lib/database.js";
 import type { Logger } from "./lib/logger.js";
+import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { createWorkspaceRouter } from "./modules/workspaces/workspace.routes.js";
+import type { PrismaClient } from "@prisma/client";
 
 export interface ApplicationDependencies {
-  database: DependencyProbe;
+  database: DependencyProbe & { prisma?: PrismaClient };
   redis: DependencyProbe;
 }
 
@@ -55,6 +59,12 @@ export function createApp(
   app.use(compression());
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+
+  if (dependencies.database.prisma) {
+    app.use(createAuthMiddleware(dependencies.database.prisma));
+    app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
+    app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma));
+  }
 
   app.use("/api/health", createHealthRouter(dependencies.database, dependencies.redis));
   app.use(notFoundHandler);
