@@ -34,6 +34,8 @@ Owners and Admins handle lightweight workspace membership, invitations, and chan
 - Messages are safe plain text. Reliability, authorization, reconnect recovery, deterministic ordering, and deduplication take priority over feature breadth or decorative behavior.
 - Desktop uses persistent navigation and a conversation surface. Mobile web is conversation-first, with navigation in a drawer or dedicated view rather than a compressed desktop layout.
 - Communication must remain the visual and interaction focus. The interface should be compact but readable, fast to operate, and low in visual noise.
+- Use shadcn/ui components wherever possible. Before creating a component, check `frontend/components/ui` for an installed equivalent, then check the shadcn registry and install the appropriate component when available. Do not manually recreate or duplicate a shadcn primitive. Relay-specific components must compose shadcn primitives unless no suitable primitive exists.
+- Every production surface must support light and dark modes. Dark mode must preserve the same hierarchy, state semantics, and WCAG 2.2 AA contrast rather than simply invert the light palette.
 - V1 excludes calls, screen sharing, bots, workflow automation, marketplace integrations, billing, enterprise compliance features, and large public communities.
 - The established architecture, API boundaries, security rules, limits, and role behavior in `docs/` remain authoritative. Visual work must not weaken or bypass them.
 
