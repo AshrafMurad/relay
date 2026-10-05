@@ -9,6 +9,7 @@ function message(id: string, operationId: string, createdAt = "2026-01-01T00:00:
     operationId,
     workspaceId: "workspace-1",
     channelId: "channel-1",
+    directConversationId: null,
     author: { id: "user-1", name: "Ada", image: null },
     content: id,
     parentMessageId: null,
@@ -36,6 +37,7 @@ describe("message reconciliation", () => {
   it("replaces an optimistic temporary ID by operation ID without duplicating it", () => {
     const optimistic = createOptimisticMessage({
       channelId: "channel-1",
+      directConversationId: null,
       content: "hello",
       operationId: "operation-1",
       parent: null,

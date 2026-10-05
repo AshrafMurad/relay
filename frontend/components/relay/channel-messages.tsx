@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Textarea } from "@/components/ui/textarea"
 import { apiRequest } from "@/lib/api/client"
-import type { AuthUserDTO, ChannelDTO, MessageDTO, MessageHistoryResponse } from "@/lib/api/contracts"
+import type { AuthUserDTO, ChannelDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, TypingUpdateEvent } from "@/lib/api/contracts"
 import {
   MESSAGE_CODE_POINT_LIMIT,
   createOptimisticMessage,
@@ -31,6 +31,8 @@ type HistoryState = "loading" | "ready" | "error"
 type SocketState = "connecting" | "connected" | "disconnected"
 
 const ACK_TIMEOUT_MS = 10_000
+const TYPING_INACTIVITY_MS = 3_000
+const TYPING_REFRESH_MS = 3_000
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
 
@@ -151,7 +153,11 @@ function MessageRow({
   )
 }
 
-export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: AuthUserDTO }) {
+type ConversationTarget =
+  | { type: "channel"; channel: ChannelDTO }
+  | { type: "dm"; conversation: DirectConversationDTO }
+
+export function ChannelMessages({ target, user }: { target: ConversationTarget; user: AuthUserDTO }) {
   const [historyState, setHistoryState] = useState<HistoryState>("loading")
   const [messages, setMessages] = useState<ClientMessage[]>([])
   const [historyError, setHistoryError] = useState("")
@@ -162,13 +168,21 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
   const [composerError, setComposerError] = useState("")
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null)
   const [socketState, setSocketState] = useState<SocketState>("connecting")
+  const [typingUsers, setTypingUsers] = useState<TypingUpdateEvent["user"][]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<RelaySocket | null>(null)
   const pendingTimeouts = useRef(new Map<string, number>())
   const shouldScrollToBottom = useRef(true)
   const olderScrollHeight = useRef<number | null>(null)
   const initialRequest = useRef(0)
-  const archived = Boolean(channel.archivedAt)
+  const typingStopTimeout = useRef<number | null>(null)
+  const lastTypingStart = useRef(0)
+  const archived = target.type === "channel" && Boolean(target.channel.archivedAt)
+  const conversationId = target.type === "channel" ? target.channel.id : target.conversation.id
+  const workspaceId = target.type === "channel" ? target.channel.workspaceId : target.conversation.workspaceId
+  const conversationRef = { type: target.type, id: conversationId } as const
+  const title = target.type === "channel" ? `#${target.channel.name}` : target.conversation.otherUser.name
+  const historyPath = target.type === "channel" ? `/channels/${conversationId}/messages` : `/direct-conversations/${conversationId}/messages`
   const draftCodePoints = Array.from(draft.trim()).length
 
   async function loadInitial() {
@@ -176,9 +190,9 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     setHistoryState("loading")
     setHistoryError("")
     try {
-      const response = await apiRequest<MessageHistoryResponse>(`/channels/${channel.id}/messages?limit=50`)
+      const response = await apiRequest<MessageHistoryResponse>(`${historyPath}?limit=50`)
       if (request !== initialRequest.current) return
-      setMessages((current) => mergeMessages(response.messages, current.filter((message) => message.channelId === channel.id)))
+      setMessages((current) => mergeMessages(response.messages, current.filter((message) => target.type === "channel" ? message.channelId === conversationId : message.directConversationId === conversationId)))
       setNextCursor(response.nextCursor)
       setHasMore(response.hasMore)
       shouldScrollToBottom.current = true
@@ -198,12 +212,12 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     }
     // The pane is keyed by channel in the shell, but the guard also makes prop changes safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel.id])
+  }, [conversationId])
 
   useEffect(() => {
     if (archived) return
     const socket = createRelaySocket()
-    const joinEvent = { workspaceId: channel.workspaceId, conversation: { type: "channel" as const, id: channel.id } }
+    const joinEvent = { workspaceId, conversation: { type: target.type, id: conversationId } as const }
     const pending = pendingTimeouts.current
     socketRef.current = socket
 
@@ -225,9 +239,15 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
       setMessages((current) => replaceMessage(current, event.message))
     })
     socket.on("message:new", (event) => {
-      if (event.message.channelId !== channel.id) return
+      if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
       shouldScrollToBottom.current = true
       setMessages((current) => mergeMessages(current, [event.message]))
+    })
+    socket.on("typing:update", (event) => {
+      if (event.conversation.type !== target.type || event.conversation.id !== conversationId || event.user.id === user.id) return
+      setTypingUsers((current) => event.typing
+        ? [...current.filter((item) => item.id !== event.user.id), event.user]
+        : current.filter((item) => item.id !== event.user.id))
     })
     socket.on("message:error", (event) => {
       if (!event.operationId) {
@@ -246,12 +266,14 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     if (socket.connected) joinChannel()
     return () => {
       socket.emit("conversation:leave", joinEvent)
+      socket.emit("typing:stop", joinEvent)
+      if (typingStopTimeout.current) window.clearTimeout(typingStopTimeout.current)
       pending.forEach((timeout) => window.clearTimeout(timeout))
       pending.clear()
       socket.disconnect()
       socketRef.current = null
     }
-  }, [archived, channel.id, channel.workspaceId])
+  }, [archived, conversationId, workspaceId, target.type, user.id])
 
   useLayoutEffect(() => {
     const viewport = scrollRef.current
@@ -270,7 +292,7 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     setLoadingOlder(true)
     setHistoryError("")
     try {
-      const response = await apiRequest<MessageHistoryResponse>(`/channels/${channel.id}/messages?cursor=${encodeURIComponent(nextCursor)}&limit=50`)
+      const response = await apiRequest<MessageHistoryResponse>(`${historyPath}?cursor=${encodeURIComponent(nextCursor)}&limit=50`)
       const viewport = scrollRef.current
       if (viewport) olderScrollHeight.current = viewport.scrollHeight
       setMessages((current) => mergeMessages(current, response.messages))
@@ -307,8 +329,8 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     }, ACK_TIMEOUT_MS))
     socket.emit("message:send", {
       operationId: clientMessage.operationId,
-      workspaceId: channel.workspaceId,
-      conversation: { type: "channel", id: channel.id },
+      workspaceId,
+      conversation: conversationRef,
       content: clientMessage.content,
       ...(clientMessage.parentMessageId ? { parentMessageId: clientMessage.parentMessageId } : {}),
     })
@@ -324,18 +346,20 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     const operationId = crypto.randomUUID()
     const temporaryId = `temporary:${crypto.randomUUID()}`
     const optimistic = createOptimisticMessage({
-      channelId: channel.id,
+      channelId: target.type === "channel" ? conversationId : null,
+      directConversationId: target.type === "dm" ? conversationId : null,
       content: parsed.content,
       operationId,
       parent: replyingTo,
       temporaryId,
       user,
-      workspaceId: channel.workspaceId,
+      workspaceId,
     })
     setMessages((current) => mergeMessages(current, [optimistic]))
     setDraft("")
     setReplyingTo(null)
     setComposerError("")
+    socketRef.current?.emit("typing:stop", { workspaceId, conversation: conversationRef })
     shouldScrollToBottom.current = true
     sendMessage(optimistic)
   }
@@ -345,6 +369,22 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
       event.preventDefault()
       submitMessage()
     }
+  }
+
+  function emitTypingStart() {
+    if (archived) return
+    const socket = socketRef.current
+    if (!socket?.connected) return
+    const now = Date.now()
+    if (now - lastTypingStart.current >= TYPING_REFRESH_MS) {
+      socket.emit("typing:start", { workspaceId, conversation: conversationRef })
+      lastTypingStart.current = now
+    }
+    if (typingStopTimeout.current) window.clearTimeout(typingStopTimeout.current)
+    typingStopTimeout.current = window.setTimeout(() => {
+      socket.emit("typing:stop", { workspaceId, conversation: conversationRef })
+      typingStopTimeout.current = null
+    }, TYPING_INACTIVITY_MS)
   }
 
   async function editMessage(message: ClientMessage, content: string) {
@@ -370,7 +410,7 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label={`Messages in ${channel.name}`}>
+    <section className="flex min-h-0 flex-1 flex-col" aria-label={`Messages in ${title}`}>
       <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
         {historyState === "loading" && (
           <div className="grid min-h-full place-items-center p-6" role="status">
@@ -383,11 +423,11 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
           </div>
         )}
         {historyState === "ready" && (
-          <div className="mx-auto w-full max-w-6xl py-3" role="log" aria-label={`Message history for ${channel.name}`}>
+          <div className="mx-auto w-full max-w-6xl py-3" role="log" aria-label={`Message history for ${title}`}>
             {hasMore && <div className="flex justify-center px-5 pb-3"><Button disabled={loadingOlder} onClick={() => void loadOlder()} size="sm" variant="outline">{loadingOlder ? "Loading..." : "Load older messages"}</Button></div>}
             {historyError && <p className="mx-5 mb-3 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{historyError}</p>}
             {messages.length === 0 ? (
-              <div className="px-5 py-16 sm:px-7"><h2 className="text-lg font-semibold">Start the conversation</h2><p className="mt-1 max-w-md text-xs leading-5 text-signal-muted">This is the beginning of #{channel.name}. Messages sent here are saved for everyone in the workspace.</p></div>
+              <div className="px-5 py-16 sm:px-7"><h2 className="text-lg font-semibold">Start the conversation</h2><p className="mt-1 max-w-md text-xs leading-5 text-signal-muted">Messages sent here are saved in {title}.</p></div>
             ) : messages.map((message) => (
               <MessageRow archived={archived} currentUserId={user.id} key={`${message.id}:${archived}`} message={message} onDelete={deleteMessage} onEdit={editMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
             ))}
@@ -408,14 +448,16 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
               </div>
             )}
             <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
+              {typingUsers.length > 0 && <p className="border-b border-signal-line px-3 py-1.5 text-[11px] text-signal-muted" aria-live="polite">{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...</p>}
               <Textarea
-                aria-label={`Message #${channel.name}`}
+                aria-label={`Message ${title}`}
                 aria-describedby={composerError ? "composer-error" : undefined}
                 aria-invalid={Boolean(composerError) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT}
                 className="min-h-16 max-h-48 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-xs leading-5 shadow-none focus-visible:border-0 focus-visible:ring-0"
-                onChange={(event) => { setDraft(event.target.value); if (composerError) setComposerError("") }}
+                onBlur={() => socketRef.current?.emit("typing:stop", { workspaceId, conversation: conversationRef })}
+                onChange={(event) => { setDraft(event.target.value); if (composerError) setComposerError(""); emitTypingStart() }}
                 onKeyDown={handleComposerKeyDown}
-                placeholder={`Message #${channel.name}`}
+                placeholder={`Message ${title}`}
                 value={draft}
               />
               <div className="flex min-h-9 items-center gap-3 border-t border-signal-line px-2.5">

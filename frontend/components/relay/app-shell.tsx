@@ -14,6 +14,7 @@ import {
   Plus,
   RotateCcw,
   SunMoon,
+  UserRound,
 } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -38,7 +39,7 @@ import {
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
-import type { AuthUserDTO, ChannelDTO, WorkspaceDTO } from "@/lib/api/contracts"
+import type { AuthUserDTO, ChannelDTO, DirectConversationDTO, WorkspaceDTO, WorkspaceMemberDTO } from "@/lib/api/contracts"
 import { canManageChannels, channelNameSchema } from "@/lib/channels"
 import { cn } from "@/lib/utils"
 
@@ -77,13 +78,16 @@ function LoadingShell() {
 
 export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode; workspaceSlug: string }) {
   const router = useRouter()
-  const params = useParams<{ channelId?: string | string[] }>()
+  const params = useParams<{ channelId?: string | string[]; conversationId?: string | string[] }>()
   const channelId = typeof params.channelId === "string" ? params.channelId : null
+  const conversationId = typeof params.conversationId === "string" ? params.conversationId : null
   const [state, setState] = useState<LoadState>("loading")
   const [user, setUser] = useState<AuthUserDTO | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceDTO[]>([])
   const [workspace, setWorkspace] = useState<WorkspaceDTO | null>(null)
   const [channels, setChannels] = useState<ChannelDTO[]>([])
+  const [members, setMembers] = useState<WorkspaceMemberDTO[]>([])
+  const [directConversations, setDirectConversations] = useState<DirectConversationDTO[]>([])
   const [error, setError] = useState("")
   const [navigationOpen, setNavigationOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
@@ -92,6 +96,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
   const [submitting, setSubmitting] = useState(false)
 
   const selectedChannel = channels.find((channel) => channel.id === channelId) ?? null
+  const selectedDirectConversation = directConversations.find((conversation) => conversation.id === conversationId) ?? null
   const mayManage = workspace ? canManageChannels(workspace.currentUserRole) : false
 
   useEffect(() => {
@@ -107,12 +112,18 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
         ])
         const currentWorkspace = availableWorkspaces.find((item) => item.slug === workspaceSlug)
         if (!currentWorkspace) throw new ApiClientError("WORKSPACE_NOT_FOUND", "Workspace was not found or is no longer available.")
-        const { channels: availableChannels } = await apiRequest<{ channels: ChannelDTO[] }>(`/workspaces/${currentWorkspace.id}/channels`)
+        const [{ channels: availableChannels }, { members: workspaceMembers }, { conversations }] = await Promise.all([
+          apiRequest<{ channels: ChannelDTO[] }>(`/workspaces/${currentWorkspace.id}/channels`),
+          apiRequest<{ members: WorkspaceMemberDTO[] }>(`/workspaces/${currentWorkspace.id}/members`),
+          apiRequest<{ conversations: DirectConversationDTO[] }>(`/workspaces/${currentWorkspace.id}/direct-conversations`),
+        ])
         if (cancelled) return
         setUser(currentUser)
         setWorkspaces(availableWorkspaces)
         setWorkspace(currentWorkspace)
         setChannels(availableChannels)
+        setMembers(workspaceMembers)
+        setDirectConversations(conversations)
         setState("ready")
 
       } catch (caught) {
@@ -131,10 +142,25 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
   }, [router, workspaceSlug])
 
   useEffect(() => {
-    if (state !== "ready" || channelId || !workspace || channels.length === 0) return
+    if (state !== "ready" || channelId || conversationId || !workspace || channels.length === 0) return
     const first = channels.find((channel) => !channel.archivedAt) ?? channels[0]
     startTransition(() => router.replace(`/app/${workspace.slug}/channels/${first.id}`))
-  }, [channelId, channels, router, state, workspace])
+  }, [channelId, conversationId, channels, router, state, workspace])
+
+  async function openDirectMessage(otherUserId: string) {
+    if (!workspace) return
+    try {
+      const { conversation } = await apiRequest<{ conversation: DirectConversationDTO }>(`/workspaces/${workspace.id}/direct-conversations`, {
+        method: "POST",
+        body: JSON.stringify({ userId: otherUserId }),
+      })
+      setDirectConversations((current) => current.some((item) => item.id === conversation.id) ? current : [conversation, ...current])
+      setNavigationOpen(false)
+      startTransition(() => router.push(`/app/${workspace.slug}/dm/${conversation.id}`))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Direct message could not be opened.")
+    }
+  }
 
   function openCreate() {
     setFormMode("create")
@@ -272,6 +298,41 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
               {mayManage ? "No channels yet. Create one to start the workspace." : "No channels are available. Ask an Owner or Admin to create one."}
             </div>
           )}
+          <div className="mt-5 flex h-9 items-center justify-between px-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal-panel-muted">Direct Messages</p>
+          </div>
+          <nav aria-label="Direct messages" className="mt-1 space-y-0.5">
+            {directConversations.map((conversation) => {
+              const active = conversation.id === conversationId
+              return (
+                <Link
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber",
+                    active ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text",
+                  )}
+                  href={`/app/${workspace.slug}/dm/${conversation.id}`}
+                  key={conversation.id}
+                  onClick={() => setNavigationOpen(false)}
+                >
+                  {active && <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-signal-amber" />}
+                  <UserRound className="size-3.5" />
+                  <span className="truncate">{conversation.otherUser.name}</span>
+                </Link>
+              )
+            })}
+            {members.filter((member) => member.userId !== user.id && !directConversations.some((conversation) => conversation.otherUser.id === member.userId)).map((member) => (
+              <button
+                className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-signal-panel-muted transition-colors hover:bg-white/5 hover:text-signal-panel-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber"
+                key={member.userId}
+                onClick={() => void openDirectMessage(member.userId)}
+                type="button"
+              >
+                <UserRound className="size-3.5" />
+                <span className="truncate">{member.name}</span>
+              </button>
+            ))}
+          </nav>
         </div>
       </ScrollArea>
 
@@ -314,12 +375,12 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
                 {navigation}
               </SheetContent>
             </Sheet>
-            <Hash className="size-4 text-signal-muted" />
+            {selectedDirectConversation ? <UserRound className="size-4 text-signal-muted" /> : <Hash className="size-4 text-signal-muted" />}
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-sm font-semibold">{selectedChannel?.name ?? workspace.name}</h1>
-              <p className="truncate text-[10px] text-signal-muted">{selectedChannel?.description || (selectedChannel ? "No channel description" : "Choose a channel from the workspace navigation")}</p>
+              <h1 className="truncate text-sm font-semibold">{selectedDirectConversation?.otherUser.name ?? selectedChannel?.name ?? workspace.name}</h1>
+              <p className="truncate text-[10px] text-signal-muted">{selectedDirectConversation ? selectedDirectConversation.otherUser.email : selectedChannel?.description || (selectedChannel ? "No channel description" : "Choose a channel or direct message from the workspace navigation")}</p>
             </div>
-            {selectedChannel && mayManage && (
+            {selectedChannel && !selectedDirectConversation && mayManage && (
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button aria-label="Channel options" size="icon-sm" type="button" variant="ghost" />}><MoreHorizontal /></DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -336,12 +397,14 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
 
           {error && state === "ready" && <p className="border-b border-red-400/20 bg-red-500/10 px-5 py-2 text-xs text-red-200" role="alert">{error}</p>}
 
-          {selectedChannel ? (
-            <ChannelMessages channel={selectedChannel} key={selectedChannel.id} user={user} />
+          {selectedDirectConversation ? (
+            <ChannelMessages key={selectedDirectConversation.id} target={{ type: "dm", conversation: selectedDirectConversation }} user={user} />
+          ) : selectedChannel ? (
+            <ChannelMessages key={selectedChannel.id} target={{ type: "channel", channel: selectedChannel }} user={user} />
           ) : (
             <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10">
               {channelId ? (
-                <div className="max-w-md text-center"><h2 className="text-xl font-semibold">Channel unavailable</h2><p className="mt-2 text-sm text-signal-muted">This channel does not belong to the current workspace or is no longer accessible.</p></div>
+                <div className="max-w-md text-center"><h2 className="text-xl font-semibold">Conversation unavailable</h2><p className="mt-2 text-sm text-signal-muted">This conversation does not belong to the current workspace or is no longer accessible.</p></div>
               ) : (
                 <div className="max-w-md text-center"><h2 className="text-xl font-semibold">No channel selected</h2><p className="mt-2 text-sm text-signal-muted">{channels.length ? "Choose a channel to open the conversation." : mayManage ? "Create the first channel for this workspace." : "An Owner or Admin needs to create a channel."}</p>{mayManage && channels.length === 0 && <Button className="mt-5" onClick={openCreate}>Create channel</Button>}</div>
               )}

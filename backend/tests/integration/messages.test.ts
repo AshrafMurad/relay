@@ -218,6 +218,20 @@ describe("durable channel message HTTP API", () => {
     expect(tiedSecond.body.messages.map((message: { id: string }) => message.id)).toEqual(tiedIds.slice(0, 1));
   });
 
+  it("creates one workspace-scoped DM and isolates its messages to participants", async () => {
+    const created = await request(app).post(`/api/workspaces/${workspaceId}/direct-conversations`).set("Cookie", cookie(0)).send({ userId: userIds[1] }).expect(201);
+    const replay = await request(app).post(`/api/workspaces/${workspaceId}/direct-conversations`).set("Cookie", cookie(1)).send({ userId: userIds[0] }).expect(201);
+    expect(replay.body.conversation.id).toBe(created.body.conversation.id);
+    expect(await database.prisma.directConversation.count({ where: { workspaceId } })).toBe(1);
+
+    const operationId = randomUUID();
+    const message = await request(app).post(`/api/direct-conversations/${created.body.conversation.id}/messages`).set("Cookie", cookie(0)).send({ operationId, content: "  private hello  " }).expect(201);
+    expect(message.body.message).toMatchObject({ workspaceId, channelId: null, directConversationId: created.body.conversation.id, operationId, content: "private hello" });
+    await request(app).get(`/api/direct-conversations/${created.body.conversation.id}/messages`).set("Cookie", cookie(1)).expect(200);
+    await request(app).get(`/api/direct-conversations/${created.body.conversation.id}/messages`).set("Cookie", cookie(2)).expect(404);
+    await request(app).post(`/api/workspaces/${workspaceId}/direct-conversations`).set("Cookie", cookie(0)).send({ userId: userIds[2] }).expect(404);
+  });
+
   it("revokes access after active membership removal", async () => {
     await database.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId: userIds[1]! } },

@@ -10,6 +10,7 @@ import { createDatabase } from "../../src/lib/database.js";
 import { createLogger } from "../../src/lib/logger.js";
 import { createSocketServer } from "../../src/realtime/socket-server.js";
 import { createChannel } from "../../src/modules/channels/channel.service.js";
+import { findOrCreateDirectConversation } from "../../src/modules/direct-conversations/direct-conversation.service.js";
 import { createWorkspace } from "../../src/modules/workspaces/workspace.service.js";
 
 const databaseUrl = process.env.DATABASE_URL ?? "postgresql://relay:relay@localhost:5432/relay";
@@ -20,6 +21,7 @@ const tokens = [randomUUID(), randomUUID(), randomUUID()];
 const workspaceIds: string[] = [];
 let workspaceId = "";
 let channelId = "";
+let directConversationId = "";
 
 function cookie(index: number) {
   return `relay_session=${tokens[index]}`;
@@ -56,6 +58,12 @@ async function join(client: Socket<ServerToClientEvents, ClientToServerEvents>, 
   });
 }
 
+async function joinDm(client: Socket<ServerToClientEvents, ClientToServerEvents>, id = directConversationId) {
+  return new Promise<{ ok: true } | { code: string; message: string }>((resolve) => {
+    client.emit("conversation:join", { workspaceId, conversation: { type: "dm", id } }, resolve);
+  });
+}
+
 beforeAll(async () => {
   await database.connect();
   await database.prisma.user.createMany({
@@ -73,6 +81,7 @@ beforeAll(async () => {
   workspaceIds.push(workspace.id);
   await database.prisma.workspaceMember.create({ data: { workspaceId, userId: userIds[1]!, role: "MEMBER" } });
   channelId = (await createChannel(database.prisma, workspaceId, userIds[0]!, { name: `socket-${randomUUID().slice(0, 8)}` })).id;
+  directConversationId = (await findOrCreateDirectConversation(database.prisma, workspaceId, userIds[0]!, userIds[1]!)).id;
   const outside = await createWorkspace(database.prisma, userIds[2]!, { name: `Socket Outside ${randomUUID()}` });
   workspaceIds.push(outside.id);
 });
@@ -140,4 +149,58 @@ describe("real-time channel messaging", () => {
       await close(httpServer, io);
     }
   });
+
+  it("broadcasts DM messages only to direct conversation participants", async () => {
+    const { httpServer, io, url } = await listen();
+    const sender = await connect(url, 0);
+    const receiver = await connect(url, 1);
+    const outsider = await connect(url, 2);
+    try {
+      await expect(joinDm(sender)).resolves.toEqual({ ok: true });
+      await expect(joinDm(receiver)).resolves.toEqual({ ok: true });
+      await expect(joinDm(outsider)).resolves.toMatchObject({ code: "CONVERSATION_NOT_FOUND" });
+      const operationId = randomUUID();
+      const received = new Promise<unknown>((resolve) => receiver.once("message:new", resolve));
+      const outsiderMessages: unknown[] = [];
+      outsider.on("message:new", (event) => outsiderMessages.push(event));
+      sender.emit("message:send", { operationId, workspaceId, conversation: { type: "dm", id: directConversationId }, content: "dm live" });
+      await expect(received).resolves.toMatchObject({ message: { workspaceId, channelId: null, directConversationId, operationId, content: "dm live" } });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(outsiderMessages).toEqual([]);
+    } finally {
+      sender.close();
+      receiver.close();
+      outsider.close();
+      await close(httpServer, io);
+    }
+  });
+
+  it("emits typing updates and delays offline presence until the final socket disconnects", async () => {
+    const { httpServer, io, url } = await listen();
+    const firstTab = await connect(url, 0);
+    const secondTab = await connect(url, 0);
+    const receiver = await connect(url, 1);
+    try {
+      await joinDm(firstTab);
+      await joinDm(secondTab);
+      await joinDm(receiver);
+      const typingStarted = new Promise<unknown>((resolve) => receiver.once("typing:update", resolve));
+      firstTab.emit("typing:start", { workspaceId, conversation: { type: "dm", id: directConversationId } });
+      await expect(typingStarted).resolves.toMatchObject({ conversation: { type: "dm", id: directConversationId }, user: { id: userIds[0] }, typing: true });
+
+      const presenceUpdates: unknown[] = [];
+      receiver.on("presence:update", (event) => presenceUpdates.push(event));
+      firstTab.close();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(presenceUpdates).not.toContainEqual({ userId: userIds[0], status: "offline" });
+      secondTab.close();
+      await new Promise((resolve) => setTimeout(resolve, 15_100));
+      expect(presenceUpdates).toContainEqual({ userId: userIds[0], status: "offline" });
+    } finally {
+      firstTab.close();
+      secondTab.close();
+      receiver.close();
+      await close(httpServer, io);
+    }
+  }, 20_000);
 });

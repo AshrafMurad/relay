@@ -9,7 +9,7 @@ export interface SystemPongEvent {
 }
 
 export interface ConversationRef {
-  type: "channel";
+  type: "channel" | "dm";
   id: string;
 }
 
@@ -43,11 +43,28 @@ export interface MessageErrorEvent {
   message: string;
 }
 
+export interface PresenceUpdateEvent {
+  userId: string;
+  status: "online" | "offline";
+}
+
+export interface TypingEvent {
+  workspaceId: string;
+  conversation: ConversationRef;
+}
+
+export interface TypingUpdateEvent extends TypingEvent {
+  user: { id: string; name: string };
+  typing: boolean;
+}
+
 export interface ClientToServerEvents {
   "system:ping": (acknowledge: (event: SystemPongEvent) => void) => void;
   "conversation:join": (event: ConversationJoinEvent, acknowledge?: (event: { ok: true } | MessageErrorEvent) => void) => void;
   "conversation:leave": (event: ConversationJoinEvent) => void;
   "message:send": (event: MessageSendEvent) => void;
+  "typing:start": (event: TypingEvent) => void;
+  "typing:stop": (event: TypingEvent) => void;
 }
 
 export interface ServerToClientEvents {
@@ -55,6 +72,8 @@ export interface ServerToClientEvents {
   "message:ack": (event: MessageAckEvent) => void;
   "message:new": (event: MessageNewEvent) => void;
   "message:error": (event: MessageErrorEvent) => void;
+  "presence:update": (event: PresenceUpdateEvent) => void;
+  "typing:update": (event: TypingUpdateEvent) => void;
 }
 
 export type InterServerEvents = Record<string, never>;
@@ -62,4 +81,5 @@ export type InterServerEvents = Record<string, never>;
 export interface SocketData {
   userId?: string;
   email?: string;
+  workspaceIds?: Set<string>;
 }

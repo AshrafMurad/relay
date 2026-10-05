@@ -72,6 +72,7 @@ export function reconcileMessageUpdate(current: ClientMessage[], message: Messag
 
 export function createOptimisticMessage({
   channelId,
+  directConversationId,
   content,
   operationId,
   parent,
@@ -79,7 +80,8 @@ export function createOptimisticMessage({
   user,
   workspaceId,
 }: {
-  channelId: string
+  channelId: string | null
+  directConversationId?: string | null
   content: string
   operationId: string
   parent: MessageDTO | null
@@ -92,6 +94,7 @@ export function createOptimisticMessage({
     id: temporaryId,
     workspaceId,
     channelId,
+    directConversationId: directConversationId ?? null,
     operationId,
     author: { id: user.id, name: user.name, image: user.image },
     content,

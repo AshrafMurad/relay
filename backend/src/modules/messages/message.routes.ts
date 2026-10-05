@@ -8,12 +8,13 @@ import { requireAuth } from "../../middleware/auth.js";
 import {
   channelMessageParamsSchema,
   createMessageSchema,
+  directMessageParamsSchema,
   editMessageSchema,
   messageHistoryQuerySchema,
   messageParamsSchema,
   type MessageHistoryQuery,
 } from "./message.contracts.js";
-import { createChannelMessage, deleteMessage, editMessage, listChannelMessages } from "./message.service.js";
+import { createChannelMessage, createDirectMessage, deleteMessage, editMessage, listChannelMessages, listDirectMessages } from "./message.service.js";
 
 function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -70,6 +71,27 @@ export function createMessageRouter(prisma: PrismaClient) {
     const { messageId } = parse(messageParamsSchema, request.params);
     const message = await deleteMessage(prisma, messageId, request.authUser!.id);
     response.json({ message });
+  }));
+
+  return router;
+}
+
+export function createDirectMessageRouter(prisma: PrismaClient) {
+  const router = Router();
+  router.use(requireAuth);
+
+  router.get("/:conversationId/messages", asyncHandler(async (request, response) => {
+    const { conversationId } = parse(directMessageParamsSchema, request.params);
+    const query = parseHistoryQuery(request.query);
+    const history = await listDirectMessages(prisma, conversationId, request.authUser!.id, query);
+    response.json(history);
+  }));
+
+  router.post("/:conversationId/messages", asyncHandler(async (request, response) => {
+    const { conversationId } = parse(directMessageParamsSchema, request.params);
+    const input = parse(createMessageSchema, request.body);
+    const result = await createDirectMessage(prisma, conversationId, request.authUser!.id, input);
+    response.status(result.created ? 201 : 200).json({ message: result.message });
   }));
 
   return router;

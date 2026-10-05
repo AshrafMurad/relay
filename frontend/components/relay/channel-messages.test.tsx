@@ -18,6 +18,7 @@ type SocketHandlerMap = {
   "message:ack": (event: MessageAckEvent) => void
   "message:new": (event: MessageNewEvent) => void
   "message:error": (event: { operationId?: string; code: string; message: string }) => void
+  "typing:update": () => void
 }
 
 function mockSocket() {
@@ -63,6 +64,7 @@ function message(id: string, content: string, createdAt: string): MessageDTO {
     id,
     workspaceId: "workspace-1",
     channelId: "channel-active",
+    directConversationId: null,
     operationId: `operation-${id}`,
     author: { id: "user-1", name: "Ada Lovelace", image: null },
     content,
@@ -92,9 +94,9 @@ describe("ChannelMessages", () => {
       hasMore: false,
     })
 
-    render(<ChannelMessages channel={channel(false)} user={user} />)
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
 
-    const log = await screen.findByRole("log", { name: "Message history for general" })
+    const log = await screen.findByRole("log", { name: "Message history for #general" })
     await waitFor(() => expect(log.textContent?.indexOf("First message")).toBeLessThan(log.textContent?.indexOf("Second message") ?? 0))
     expect(screen.getByPlaceholderText("Message #general")).toBeTruthy()
   })
@@ -102,7 +104,7 @@ describe("ChannelMessages", () => {
   it("keeps archived history readable without rendering write controls", async () => {
     vi.mocked(apiRequest).mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
 
-    render(<ChannelMessages channel={channel(true)} user={user} />)
+    render(<ChannelMessages target={{ type: "channel", channel: channel(true) }} user={user} />)
 
     expect(await screen.findByText(/history remains available/i)).toBeTruthy()
     expect(screen.queryByRole("textbox")).toBeNull()
@@ -112,8 +114,8 @@ describe("ChannelMessages", () => {
     const { handlers } = mockSocket()
     vi.mocked(apiRequest).mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
 
-    render(<ChannelMessages channel={channel(false)} user={user} />)
-    await screen.findByRole("log", { name: "Message history for general" })
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+    await screen.findByRole("log", { name: "Message history for #general" })
 
     handlers["message:new"]?.({
       sequence: "1",
@@ -128,7 +130,7 @@ describe("ChannelMessages", () => {
     const { handlers, sent } = mockSocket()
     vi.mocked(apiRequest).mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
 
-    render(<ChannelMessages channel={channel(false)} user={user} />)
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
     await userEvents.type(await screen.findByPlaceholderText("Message #general"), "Socket hello")
     await userEvents.click(screen.getByLabelText("Send message"))
 

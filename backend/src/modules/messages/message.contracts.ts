@@ -12,6 +12,7 @@ export const createMessageSchema = z.object({
 
 export const editMessageSchema = z.object({ content: z.string() });
 export const channelMessageParamsSchema = z.object({ channelId: z.string().uuid() });
+export const directMessageParamsSchema = z.object({ conversationId: z.string().uuid() });
 export const messageParamsSchema = z.object({ messageId: z.string().uuid() });
 export const messageHistoryQuerySchema = z.object({
   cursor: z.string().max(512).optional(),
@@ -25,7 +26,8 @@ export type MessageHistoryQuery = z.infer<typeof messageHistoryQuerySchema>;
 export interface MessageDTO {
   id: string;
   workspaceId: string;
-  channelId: string;
+  channelId: string | null;
+  directConversationId: string | null;
   operationId: string;
   author: { id: string; name: string; image: string | null };
   content: string;

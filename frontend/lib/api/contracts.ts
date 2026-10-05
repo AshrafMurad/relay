@@ -65,10 +65,26 @@ export interface ChannelDTO {
   updatedAt: string;
 }
 
+export interface DirectConversationDTO {
+  id: string;
+  workspaceId: string;
+  participantKey: string;
+  otherUser: {
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+  };
+  lastMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MessageDTO {
   id: string;
   workspaceId: string;
-  channelId: string;
+  channelId: string | null;
+  directConversationId: string | null;
   operationId: string;
   author: {
     id: string;
@@ -96,7 +112,7 @@ export interface MessageHistoryResponse {
 }
 
 export interface ConversationRef {
-  type: "channel";
+  type: "channel" | "dm";
   id: string;
 }
 
@@ -128,6 +144,21 @@ export interface MessageErrorEvent {
   operationId?: string;
   code: string;
   message: string;
+}
+
+export interface PresenceUpdateEvent {
+  userId: string;
+  status: "online" | "offline";
+}
+
+export interface TypingEvent {
+  workspaceId: string;
+  conversation: ConversationRef;
+}
+
+export interface TypingUpdateEvent extends TypingEvent {
+  user: { id: string; name: string };
+  typing: boolean;
 }
 
 export interface ApiErrorResponse {

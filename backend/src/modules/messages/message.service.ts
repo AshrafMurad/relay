@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import { ApiError } from "../../lib/api-error.js";
+import { requireAccessibleDirectConversation } from "../direct-conversations/direct-conversation.service.js";
 import {
   MESSAGE_MAX_CODE_POINTS,
   type CreateMessageInput,
@@ -20,6 +21,7 @@ const messageSelect = {
   id: true,
   workspaceId: true,
   channelId: true,
+  directConversationId: true,
   operationId: true,
   content: true,
   parentMessageId: true,
@@ -47,11 +49,17 @@ interface LockedChannel {
   archivedAt: Date | null;
 }
 
+interface LockedDirectConversation {
+  id: string;
+  workspaceId: string;
+}
+
 function toMessageDTO(message: MessageRecord): MessageDTO {
   return {
     id: message.id,
     workspaceId: message.workspaceId,
     channelId: message.channelId,
+    directConversationId: message.directConversationId,
     operationId: message.operationId,
     author: message.author,
     content: message.content,
@@ -126,17 +134,38 @@ async function lockAccessibleChannel(prisma: Transaction, channelId: string, use
   return channel;
 }
 
+async function lockAccessibleDirectConversation(prisma: Transaction, conversationId: string, userId: string) {
+  const conversations = await prisma.$queryRaw<LockedDirectConversation[]>(Prisma.sql`
+    SELECT dc."id", dc."workspaceId"
+    FROM "DirectConversation" dc
+    JOIN "DirectConversationMember" dcm
+      ON dcm."conversationId" = dc."id"
+      AND dcm."userId" = ${userId}::uuid
+    JOIN "WorkspaceMember" wm
+      ON wm."workspaceId" = dc."workspaceId"
+      AND wm."userId" = ${userId}::uuid
+      AND wm."status" = 'ACTIVE'
+    WHERE dc."id" = ${conversationId}::uuid
+    FOR SHARE OF dc, dcm, wm
+  `);
+  const conversation = conversations[0];
+  if (!conversation) throw new ApiError(404, "CONVERSATION_NOT_FOUND", "Direct conversation was not found.");
+  return conversation;
+}
+
 async function lockAccessibleMessage(prisma: Transaction, messageId: string, userId: string) {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT m."id"
     FROM "Message" m
-    JOIN "Channel" c ON c."id" = m."channelId" AND c."workspaceId" = m."workspaceId"
+    LEFT JOIN "DirectConversation" dc ON dc."id" = m."directConversationId" AND dc."workspaceId" = m."workspaceId"
+    LEFT JOIN "DirectConversationMember" dcm ON dcm."conversationId" = dc."id" AND dcm."userId" = ${userId}::uuid
     JOIN "WorkspaceMember" wm
       ON wm."workspaceId" = m."workspaceId"
       AND wm."userId" = ${userId}::uuid
       AND wm."status" = 'ACTIVE'
     WHERE m."id" = ${messageId}::uuid
-    FOR UPDATE OF m, c, wm
+      AND (m."channelId" IS NOT NULL OR dcm."id" IS NOT NULL)
+    FOR UPDATE OF m, wm
   `);
   if (!rows[0]) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
   const message = await prisma.message.findUnique({
@@ -159,6 +188,39 @@ export async function listChannelMessages(
     where: {
       channelId: channel.id,
       workspaceId: channel.workspaceId,
+      ...(cursor === undefined ? {} : {
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      }),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: options.limit + 1,
+    select: messageSelect,
+  });
+  const hasMore = messages.length > options.limit;
+  const page = messages.slice(0, options.limit);
+  const oldest = page.at(-1);
+  return {
+    messages: page.reverse().map(toMessageDTO),
+    nextCursor: hasMore && oldest ? encodeMessageCursor(oldest.createdAt, oldest.id) : null,
+    hasMore,
+  };
+}
+
+export async function listDirectMessages(
+  prisma: PrismaClient,
+  conversationId: string,
+  userId: string,
+  options: { cursor?: string; limit: number },
+): Promise<MessageHistoryDTO> {
+  const conversation = await requireAccessibleDirectConversation(prisma, conversationId, userId);
+  const cursor = options.cursor === undefined ? undefined : decodeMessageCursor(options.cursor);
+  const messages = await prisma.message.findMany({
+    where: {
+      directConversationId: conversation.id,
+      workspaceId: conversation.workspaceId,
       ...(cursor === undefined ? {} : {
         OR: [
           { createdAt: { lt: cursor.createdAt } },
@@ -236,12 +298,67 @@ export async function createChannelMessage(
   }
 }
 
+export async function createDirectMessage(
+  prisma: PrismaClient,
+  conversationId: string,
+  authorId: string,
+  input: CreateMessageInput,
+): Promise<{ message: MessageDTO; created: boolean }> {
+  const content = normalizeMessageContent(input.content);
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      const conversation = await lockAccessibleDirectConversation(transaction, conversationId, authorId);
+      const replay = await transaction.message.findUnique({
+        where: { authorId_operationId: { authorId, operationId: input.operationId } },
+        select: messageSelect,
+      });
+      if (replay) {
+        if (replay.directConversationId !== conversation.id || replay.workspaceId !== conversation.workspaceId) {
+          throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
+        }
+        return { message: toMessageDTO(replay), created: false };
+      }
+      if (input.parentMessageId) {
+        const parent = await transaction.message.findFirst({
+          where: { id: input.parentMessageId, directConversationId: conversation.id, workspaceId: conversation.workspaceId },
+          select: { id: true },
+        });
+        if (!parent) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Parent message was not found.");
+      }
+      const message = await transaction.message.create({
+        data: {
+          workspaceId: conversation.workspaceId,
+          directConversationId: conversation.id,
+          authorId,
+          operationId: input.operationId,
+          parentMessageId: input.parentMessageId ?? null,
+          content,
+          createdAt: new Date(),
+        },
+        select: messageSelect,
+      });
+      return { message: toMessageDTO(message), created: true };
+    });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+    const conversation = await requireAccessibleDirectConversation(prisma, conversationId, authorId);
+    const existing = await prisma.message.findUnique({
+      where: { authorId_operationId: { authorId, operationId: input.operationId } },
+      select: messageSelect,
+    });
+    if (!existing || existing.directConversationId !== conversation.id || existing.workspaceId !== conversation.workspaceId) {
+      throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
+    }
+    return { message: toMessageDTO(existing), created: false };
+  }
+}
+
 export async function editMessage(prisma: PrismaClient, messageId: string, authorId: string, input: EditMessageInput) {
   const content = normalizeMessageContent(input.content);
   return prisma.$transaction(async (transaction) => {
     const existing = await lockAccessibleMessage(transaction, messageId, authorId);
     if (existing.authorId !== authorId) throw new ApiError(403, "FORBIDDEN", "Only the author can edit this message.");
-    if (existing.channel.archivedAt) throw new ApiError(409, "CHANNEL_ARCHIVED", "Archived channels are read-only.");
+    if (existing.channel?.archivedAt) throw new ApiError(409, "CHANNEL_ARCHIVED", "Archived channels are read-only.");
     if (existing.deletedAt) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
     const message = await transaction.message.update({
       where: { id: existing.id },
