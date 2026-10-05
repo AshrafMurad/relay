@@ -98,7 +98,7 @@ export function decodeMessageCursor(cursor: string) {
   }
 }
 
-async function requireAccessibleChannel(prisma: PrismaClient, channelId: string, userId: string) {
+export async function requireAccessibleChannel(prisma: PrismaClient, channelId: string, userId: string) {
   const channel = await prisma.channel.findFirst({
     where: {
       id: channelId,

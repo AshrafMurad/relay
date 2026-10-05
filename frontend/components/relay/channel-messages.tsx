@@ -24,9 +24,13 @@ import {
   validateMessageContent,
   type ClientMessage,
 } from "@/lib/messages"
+import { createRelaySocket, type RelaySocket } from "@/lib/realtime/socket"
 import { cn } from "@/lib/utils"
 
 type HistoryState = "loading" | "ready" | "error"
+type SocketState = "connecting" | "connected" | "disconnected"
+
+const ACK_TIMEOUT_MS = 10_000
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
 
@@ -157,7 +161,10 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
   const [draft, setDraft] = useState("")
   const [composerError, setComposerError] = useState("")
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null)
+  const [socketState, setSocketState] = useState<SocketState>("connecting")
   const scrollRef = useRef<HTMLDivElement>(null)
+  const socketRef = useRef<RelaySocket | null>(null)
+  const pendingTimeouts = useRef(new Map<string, number>())
   const shouldScrollToBottom = useRef(true)
   const olderScrollHeight = useRef<number | null>(null)
   const initialRequest = useRef(0)
@@ -184,11 +191,67 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
   }
 
   useEffect(() => {
-    void loadInitial()
-    return () => { initialRequest.current += 1 }
+    const timeout = window.setTimeout(() => void loadInitial(), 0)
+    return () => {
+      window.clearTimeout(timeout)
+      initialRequest.current += 1
+    }
     // The pane is keyed by channel in the shell, but the guard also makes prop changes safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel.id])
+
+  useEffect(() => {
+    if (archived) return
+    const socket = createRelaySocket()
+    const joinEvent = { workspaceId: channel.workspaceId, conversation: { type: "channel" as const, id: channel.id } }
+    const pending = pendingTimeouts.current
+    socketRef.current = socket
+
+    function joinChannel() {
+      setSocketState("connected")
+      socket.emit("conversation:join", joinEvent, (event) => {
+        if ("ok" in event) return
+        setComposerError(event.message)
+      })
+    }
+
+    socket.on("connect", joinChannel)
+    socket.on("disconnect", () => setSocketState("disconnected"))
+    socket.on("connect_error", () => setSocketState("disconnected"))
+    socket.on("message:ack", (event) => {
+      window.clearTimeout(pending.get(event.operationId))
+      pending.delete(event.operationId)
+      shouldScrollToBottom.current = true
+      setMessages((current) => replaceMessage(current, event.message))
+    })
+    socket.on("message:new", (event) => {
+      if (event.message.channelId !== channel.id) return
+      shouldScrollToBottom.current = true
+      setMessages((current) => mergeMessages(current, [event.message]))
+    })
+    socket.on("message:error", (event) => {
+      if (!event.operationId) {
+        setComposerError(event.message)
+        return
+      }
+      window.clearTimeout(pending.get(event.operationId))
+      pending.delete(event.operationId)
+      setMessages((current) => current.map((message) => message.operationId === event.operationId ? {
+        ...message,
+        delivery: "failed",
+        failureMessage: event.message,
+      } : message))
+    })
+
+    if (socket.connected) joinChannel()
+    return () => {
+      socket.emit("conversation:leave", joinEvent)
+      pending.forEach((timeout) => window.clearTimeout(timeout))
+      pending.clear()
+      socket.disconnect()
+      socketRef.current = null
+    }
+  }, [archived, channel.id, channel.workspaceId])
 
   useLayoutEffect(() => {
     const viewport = scrollRef.current
@@ -221,26 +284,34 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     }
   }
 
-  async function sendMessage(clientMessage: ClientMessage) {
+  function sendMessage(clientMessage: ClientMessage) {
     if (archived) return
     setMessages((current) => current.map((message) => message.operationId === clientMessage.operationId ? { ...message, delivery: "sending", failureMessage: undefined } : message))
-    try {
-      const { message } = await apiRequest<{ message: MessageDTO }>(`/channels/${channel.id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({
-          operationId: clientMessage.operationId,
-          content: clientMessage.content,
-          ...(clientMessage.parentMessageId ? { parentMessageId: clientMessage.parentMessageId } : {}),
-        }),
-      })
-      setMessages((current) => replaceMessage(current, message))
-    } catch (caught) {
+    const socket = socketRef.current
+    if (!socket?.connected) {
       setMessages((current) => current.map((message) => message.operationId === clientMessage.operationId ? {
         ...message,
         delivery: "failed",
-        failureMessage: messageError(caught, "Message was not sent."),
+        failureMessage: "Connection is offline. Retry when reconnected.",
       } : message))
+      return
     }
+    window.clearTimeout(pendingTimeouts.current.get(clientMessage.operationId))
+    pendingTimeouts.current.set(clientMessage.operationId, window.setTimeout(() => {
+      pendingTimeouts.current.delete(clientMessage.operationId)
+      setMessages((current) => current.map((message) => message.operationId === clientMessage.operationId ? {
+        ...message,
+        delivery: "failed",
+        failureMessage: "No acknowledgement received. Retry to check the saved message.",
+      } : message))
+    }, ACK_TIMEOUT_MS))
+    socket.emit("message:send", {
+      operationId: clientMessage.operationId,
+      workspaceId: channel.workspaceId,
+      conversation: { type: "channel", id: channel.id },
+      content: clientMessage.content,
+      ...(clientMessage.parentMessageId ? { parentMessageId: clientMessage.parentMessageId } : {}),
+    })
   }
 
   function submitMessage() {
@@ -266,7 +337,7 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
     setReplyingTo(null)
     setComposerError("")
     shouldScrollToBottom.current = true
-    void sendMessage(optimistic)
+    sendMessage(optimistic)
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -318,7 +389,7 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
             {messages.length === 0 ? (
               <div className="px-5 py-16 sm:px-7"><h2 className="text-lg font-semibold">Start the conversation</h2><p className="mt-1 max-w-md text-xs leading-5 text-signal-muted">This is the beginning of #{channel.name}. Messages sent here are saved for everyone in the workspace.</p></div>
             ) : messages.map((message) => (
-              <MessageRow archived={archived} currentUserId={user.id} key={`${message.id}:${archived}`} message={message} onDelete={deleteMessage} onEdit={editMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={(failed) => void sendMessage(failed)} />
+              <MessageRow archived={archived} currentUserId={user.id} key={`${message.id}:${archived}`} message={message} onDelete={deleteMessage} onEdit={editMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
             ))}
           </div>
         )}
@@ -350,6 +421,7 @@ export function ChannelMessages({ channel, user }: { channel: ChannelDTO; user: 
               <div className="flex min-h-9 items-center gap-3 border-t border-signal-line px-2.5">
                 <span className={cn("font-mono text-[9px] tabular-nums text-signal-muted", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
                 <span className="hidden text-[9px] text-signal-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
+                <span className="text-[9px] text-signal-muted" aria-live="polite">{socketState === "connected" ? "Live" : socketState === "connecting" ? "Connecting..." : "Offline"}</span>
                 <Button aria-label="Send message" className="ml-auto size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={!draft.trim() || draftCodePoints > MESSAGE_CODE_POINT_LIMIT} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
               </div>
             </div>

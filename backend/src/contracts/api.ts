@@ -18,7 +18,9 @@ export type ApiErrorCode =
   | "MESSAGE_EMPTY"
   | "MESSAGE_TOO_LONG"
   | "CHANNEL_ARCHIVED"
-  | "INVALID_CURSOR";
+  | "INVALID_CURSOR"
+  | "MESSAGE_SEND_RATE_LIMITED"
+  | "RATE_LIMITED";
 
 export interface ApiErrorResponse {
   error: {

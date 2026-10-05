@@ -95,6 +95,41 @@ export interface MessageHistoryResponse {
   hasMore: boolean;
 }
 
+export interface ConversationRef {
+  type: "channel";
+  id: string;
+}
+
+export interface ConversationJoinEvent {
+  workspaceId: string;
+  conversation: ConversationRef;
+}
+
+export interface MessageSendEvent {
+  operationId: string;
+  workspaceId: string;
+  conversation: ConversationRef;
+  content: string;
+  parentMessageId?: string | null;
+}
+
+export interface MessageAckEvent {
+  operationId: string;
+  sequence: string;
+  message: MessageDTO;
+}
+
+export interface MessageNewEvent {
+  sequence: string;
+  message: MessageDTO;
+}
+
+export interface MessageErrorEvent {
+  operationId?: string;
+  code: string;
+  message: string;
+}
+
 export interface ApiErrorResponse {
   error: { code: string; message: string; requestId?: string };
 }
