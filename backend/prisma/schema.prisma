@@ -35,6 +35,7 @@ model User {
   sentInvitations      WorkspaceInvitation[] @relation("InvitationSender")
   acceptedInvitations  WorkspaceInvitation[] @relation("InvitationAcceptedUser")
   createdChannels      Channel[]              @relation("ChannelCreator")
+  messages             Message[]              @relation("MessageAuthor")
 }
 
 model Account {
@@ -93,6 +94,7 @@ model Workspace {
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
   channels    Channel[]
+  messages    Message[]
 }
 
 model WorkspaceMember {
@@ -147,7 +149,35 @@ model Channel {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy User      @relation("ChannelCreator", fields: [createdById], references: [id])
+  messages  Message[]
 
   @@index([workspaceId, archivedAt, name])
   @@index([createdById])
+  @@unique([id, workspaceId])
+}
+
+model Message {
+  id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @db.Uuid
+  channelId       String    @db.Uuid
+  authorId        String    @db.Uuid
+  operationId     String    @db.Uuid
+  parentMessageId String?   @db.Uuid
+  content         String
+  editedAt        DateTime? @db.Timestamptz(6)
+  deletedAt       DateTime? @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel   Channel   @relation(fields: [channelId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  author    User      @relation("MessageAuthor", fields: [authorId], references: [id])
+  parent    Message?  @relation("MessageReplies", fields: [parentMessageId], references: [id])
+  replies   Message[] @relation("MessageReplies")
+
+  @@unique([authorId, operationId])
+  @@index([channelId, createdAt, id])
+  @@index([workspaceId])
+  @@index([parentMessageId])
+  @@index([authorId])
 }

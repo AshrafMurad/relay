@@ -13,7 +13,12 @@ export type ApiErrorCode =
   | "WORKSPACE_NOT_FOUND"
   | "CHANNEL_NOT_FOUND"
   | "CHANNEL_NAME_TAKEN"
-  | "DEFAULT_CHANNEL_PROTECTED";
+  | "DEFAULT_CHANNEL_PROTECTED"
+  | "MESSAGE_NOT_FOUND"
+  | "MESSAGE_EMPTY"
+  | "MESSAGE_TOO_LONG"
+  | "CHANNEL_ARCHIVED"
+  | "INVALID_CURSOR";
 
 export interface ApiErrorResponse {
   error: {

@@ -65,6 +65,36 @@ export interface ChannelDTO {
   updatedAt: string;
 }
 
+export interface MessageDTO {
+  id: string;
+  workspaceId: string;
+  channelId: string;
+  operationId: string;
+  author: {
+    id: string;
+    name: string;
+    image: string | null;
+  };
+  content: string;
+  parentMessageId: string | null;
+  parent: {
+    id: string;
+    authorName: string;
+    content: string;
+    deletedAt: string | null;
+  } | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MessageHistoryResponse {
+  messages: MessageDTO[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface ApiErrorResponse {
   error: { code: string; message: string; requestId?: string };
 }

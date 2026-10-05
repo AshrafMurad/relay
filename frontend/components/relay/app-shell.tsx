@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { startTransition, useEffect, useState, type FormEvent } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { startTransition, useEffect, useState, type FormEvent, type ReactNode } from "react"
 import {
   Archive,
   ChevronDown,
@@ -18,6 +18,7 @@ import {
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { ChannelMessages } from "@/components/relay/channel-messages"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,8 +75,10 @@ function LoadingShell() {
   )
 }
 
-export function RelayAppShell({ workspaceSlug, channelId }: { workspaceSlug: string; channelId: string | null }) {
+export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode; workspaceSlug: string }) {
   const router = useRouter()
+  const params = useParams<{ channelId?: string | string[] }>()
+  const channelId = typeof params.channelId === "string" ? params.channelId : null
   const [state, setState] = useState<LoadState>("loading")
   const [user, setUser] = useState<AuthUserDTO | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceDTO[]>([])
@@ -95,6 +98,8 @@ export function RelayAppShell({ workspaceSlug, channelId }: { workspaceSlug: str
     let cancelled = false
 
     async function load() {
+      setState("loading")
+      setError("")
       try {
         const [{ user: currentUser }, { workspaces: availableWorkspaces }] = await Promise.all([
           apiRequest<{ user: AuthUserDTO }>("/auth/me"),
@@ -110,10 +115,6 @@ export function RelayAppShell({ workspaceSlug, channelId }: { workspaceSlug: str
         setChannels(availableChannels)
         setState("ready")
 
-        if (!channelId && availableChannels.length > 0) {
-          const first = availableChannels.find((channel) => !channel.archivedAt) ?? availableChannels[0]
-          startTransition(() => router.replace(`/app/${currentWorkspace.slug}/channels/${first.id}`))
-        }
       } catch (caught) {
         if (cancelled) return
         if (caught instanceof ApiClientError && caught.code === "UNAUTHORIZED") {
@@ -127,7 +128,13 @@ export function RelayAppShell({ workspaceSlug, channelId }: { workspaceSlug: str
 
     void load()
     return () => { cancelled = true }
-  }, [channelId, router, workspaceSlug])
+  }, [router, workspaceSlug])
+
+  useEffect(() => {
+    if (state !== "ready" || channelId || !workspace || channels.length === 0) return
+    const first = channels.find((channel) => !channel.archivedAt) ?? channels[0]
+    startTransition(() => router.replace(`/app/${workspace.slug}/channels/${first.id}`))
+  }, [channelId, channels, router, state, workspace])
 
   function openCreate() {
     setFormMode("create")
@@ -280,6 +287,7 @@ export function RelayAppShell({ workspaceSlug, channelId }: { workspaceSlug: str
   return (
     <TooltipProvider>
       <div className="grid h-dvh overflow-hidden bg-signal-paper text-signal-ink md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[64px_260px_minmax(0,1fr)]">
+        {children}
         <aside className="hidden h-dvh flex-col items-center border-r border-signal-line bg-signal-carbon py-3 md:flex">
           <div className="mb-4 text-signal-amber"><RelayMark /><span className="sr-only">Relay</span></div>
           <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2">
@@ -328,20 +336,17 @@ export function RelayAppShell({ workspaceSlug, channelId }: { workspaceSlug: str
 
           {error && state === "ready" && <p className="border-b border-red-400/20 bg-red-500/10 px-5 py-2 text-xs text-red-200" role="alert">{error}</p>}
 
-          <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10">
-            {selectedChannel ? (
-              <div className="max-w-lg text-center">
-                <div className="mx-auto grid size-14 place-items-center rounded-xl border border-signal-line bg-signal-surface"><Hash className="size-6 text-signal-amber" /></div>
-                <h2 className="mt-5 text-2xl font-semibold">Welcome to #{selectedChannel.name}</h2>
-                <p className="mt-2 text-sm leading-6 text-signal-muted">{selectedChannel.description || "This channel is ready. Durable messaging arrives in Sprint 3."}</p>
-                {selectedChannel.archivedAt && <p className="mt-4 rounded-md border border-signal-line bg-signal-surface px-3 py-2 text-xs font-medium">Archived channels remain readable. Restore this channel to make it active again.</p>}
-              </div>
-            ) : channelId ? (
-              <div className="max-w-md text-center"><h2 className="text-xl font-semibold">Channel unavailable</h2><p className="mt-2 text-sm text-signal-muted">This channel does not belong to the current workspace or is no longer accessible.</p></div>
-            ) : (
-              <div className="max-w-md text-center"><h2 className="text-xl font-semibold">No channel selected</h2><p className="mt-2 text-sm text-signal-muted">{channels.length ? "Choose a channel to open the conversation." : mayManage ? "Create the first channel for this workspace." : "An Owner or Admin needs to create a channel."}</p>{mayManage && channels.length === 0 && <Button className="mt-5" onClick={openCreate}>Create channel</Button>}</div>
-            )}
-          </section>
+          {selectedChannel ? (
+            <ChannelMessages channel={selectedChannel} key={selectedChannel.id} user={user} />
+          ) : (
+            <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10">
+              {channelId ? (
+                <div className="max-w-md text-center"><h2 className="text-xl font-semibold">Channel unavailable</h2><p className="mt-2 text-sm text-signal-muted">This channel does not belong to the current workspace or is no longer accessible.</p></div>
+              ) : (
+                <div className="max-w-md text-center"><h2 className="text-xl font-semibold">No channel selected</h2><p className="mt-2 text-sm text-signal-muted">{channels.length ? "Choose a channel to open the conversation." : mayManage ? "Create the first channel for this workspace." : "An Owner or Admin needs to create a channel."}</p>{mayManage && channels.length === 0 && <Button className="mt-5" onClick={openCreate}>Create channel</Button>}</div>
+              )}
+            </section>
+          )}
         </main>
 
         <Sheet onOpenChange={setFormOpen} open={formOpen}>
