@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
+import { useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRight, CheckCircle2, LockKeyhole, RadioTower, ShieldCheck } from "lucide-react"
+import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, RadioTower, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { apiRequest, ApiClientError } from "@/lib/api/client"
@@ -12,6 +12,10 @@ import { cn } from "@/lib/utils"
 
 type AuthMode = "login" | "signup"
 type Status = { tone: "neutral" | "success" | "error"; message: string } | null
+type FieldErrors = Partial<Record<"name" | "email" | "password", string>>
+
+const PASSWORD_MIN_LENGTH = 6
+const PASSWORD_MAX_LENGTH = 128
 
 function inputClass() {
   return "h-11 rounded-md border border-signal-line bg-signal-surface px-3 text-sm text-signal-ink outline-none transition placeholder:text-signal-muted/70 focus:border-signal-cyan focus:ring-2 focus:ring-signal-cyan/15"
@@ -38,11 +42,30 @@ function StatusMessage({ status }: { status: Status }) {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function validateAuthForm(form: FormData, isSignup: boolean) {
+  const values = {
+    name: String(form.get("name") ?? "").trim(),
+    email: String(form.get("email") ?? "").trim(),
+    password: String(form.get("password") ?? ""),
+  }
+  const errors: FieldErrors = {}
+
+  if (isSignup && !values.name) errors.name = "Enter your name."
+  if (!values.email) errors.email = "Enter your email."
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = "Enter a valid email address."
+  if (!values.password) errors.password = "Enter your password."
+  else if (isSignup && values.password.length < PASSWORD_MIN_LENGTH) errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`
+  else if (values.password.length > PASSWORD_MAX_LENGTH) errors.password = `Password must be ${PASSWORD_MAX_LENGTH} characters or fewer.`
+
+  return { values, errors }
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium text-signal-ink">
       {label}
       {children}
+      {error && <span className="text-xs font-medium text-red-600">{error}</span>}
     </label>
   )
 }
@@ -50,19 +73,28 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const router = useRouter()
   const [status, setStatus] = useState<Status>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const isSignup = mode === "signup"
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
+    const { values, errors } = validateAuthForm(form, isSignup)
+    setFieldErrors(errors)
+    setStatus(null)
+    if (Object.keys(errors).length > 0) return
+
+    setIsSubmitting(true)
     try {
       if (isSignup) {
         await apiRequest<{ user: AuthUserDTO }>("/auth/signup", {
           method: "POST",
           body: JSON.stringify({
-            name: form.get("name"),
-            email: form.get("email"),
-            password: form.get("password"),
+            name: values.name,
+            email: values.email,
+            password: values.password,
           }),
         })
         setStatus({ tone: "success", message: "Account created. You can sign in now." })
@@ -71,17 +103,19 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
       await apiRequest<{ user: AuthUserDTO }>("/auth/signin", {
         method: "POST",
-        body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
+        body: JSON.stringify({ email: values.email, password: values.password }),
       })
       router.push("/workspace")
     } catch (error) {
       setStatus(statusFromError(error))
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <main className="min-h-dvh overflow-y-auto bg-signal-carbon px-4 py-4 text-signal-panel-text md:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100dvh-2rem)] w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_440px]">
+    <main className="h-dvh overflow-y-auto bg-signal-carbon px-4 py-4 text-signal-panel-text md:px-6 lg:px-8">
+      <div className="mx-auto grid min-h-full w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_440px]">
         <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-signal-panel p-5 md:p-8">
           <div className="absolute bottom-0 left-10 top-24 w-px bg-signal-amber/35" aria-hidden="true" />
           <div className="relative flex h-full min-h-[520px] flex-col justify-between gap-10">
@@ -132,11 +166,29 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
             <div className="mt-5"><StatusMessage status={status} /></div>
 
-            <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
-              {isSignup && <Field label="Name"><input className={inputClass()} name="name" placeholder="Mina Chen" required /></Field>}
-              <Field label="Email"><input className={inputClass()} name="email" placeholder="you@team.com" required type="email" /></Field>
-              <Field label="Password"><input className={inputClass()} minLength={isSignup ? 12 : undefined} name="password" placeholder={isSignup ? "At least 12 characters" : "Your password"} required type="password" /></Field>
-              <Button className="mt-1 h-10" type="submit">
+            <form className="mt-5 grid gap-4" noValidate onSubmit={handleSubmit}>
+              {isSignup && <Field error={fieldErrors.name} label="Name"><input aria-invalid={Boolean(fieldErrors.name)} className={inputClass()} name="name" placeholder="Mina Chen" /></Field>}
+              <Field error={fieldErrors.email} label="Email"><input aria-invalid={Boolean(fieldErrors.email)} className={inputClass()} inputMode="email" name="email" placeholder="you@team.com" /></Field>
+              <Field error={fieldErrors.password} label="Password">
+                <div className="relative">
+                  <input
+                    aria-invalid={Boolean(fieldErrors.password)}
+                    className={cn(inputClass(), "w-full pr-11")}
+                    name="password"
+                    placeholder={isSignup ? `At least ${PASSWORD_MIN_LENGTH} characters` : "Your password"}
+                    type={showPassword ? "text" : "password"}
+                  />
+                  <button
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-signal-muted transition hover:bg-signal-surface-raised hover:text-signal-ink focus:outline-none focus:ring-2 focus:ring-signal-cyan/25"
+                    onClick={() => setShowPassword((current) => !current)}
+                    type="button"
+                  >
+                    {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+                  </button>
+                </div>
+              </Field>
+              <Button className="mt-1 h-10" disabled={isSubmitting} type="submit">
                 {isSignup ? "Create account" : "Enter workspace"}
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Button>

@@ -6,12 +6,12 @@ import type { Environment } from "../../config/env.js";
 import { ApiError } from "../../lib/api-error.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { sessionCookieOptions, signIn, signOut, signUp, toAuthUserDTO, verifyEmail, SESSION_COOKIE_NAME } from "./auth.service.js";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, sessionCookieOptions, signIn, signOut, signUp, toAuthUserDTO, verifyEmail, SESSION_COOKIE_NAME } from "./auth.service.js";
 
 const signUpSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(120),
-  password: z.string().min(12).max(128),
+  password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
 });
 
 const signInSchema = z.object({

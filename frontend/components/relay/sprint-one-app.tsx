@@ -187,8 +187,8 @@ export function SprintOneApp() {
             <div className="mt-6 grid gap-3 rounded-lg border border-white/10 bg-black/10 p-4">
               <p className="text-sm text-signal-panel-muted">Use the dedicated auth pages, then return here to create or enter a workspace.</p>
               <div className="flex flex-wrap gap-2">
-                <Button render={<Link href="/login" />} type="button">Log in</Button>
-                <Button render={<Link href="/signup" />} type="button" variant="outline">Sign up</Button>
+                <Button nativeButton={false} render={<Link href="/login" />} type="button">Log in</Button>
+                <Button nativeButton={false} render={<Link href="/signup" />} type="button" variant="outline">Sign up</Button>
               </div>
             </div>
           )}
@@ -222,7 +222,7 @@ export function SprintOneApp() {
                 <div className="grid gap-6">
                   <div className="flex items-center justify-between rounded-xl border border-signal-amber/30 bg-signal-amber/10 p-5">
                     <div><h2 className="font-semibold">{activeWorkspace.name}</h2><p className="text-sm text-signal-muted">Open the channel workspace.</p></div>
-                    <Button render={<Link href={`/app/${activeWorkspace.slug}`} />}>Enter workspace</Button>
+                    <Button nativeButton={false} render={<Link href={`/app/${activeWorkspace.slug}`} />}>Enter workspace</Button>
                   </div>
                   <div className="grid gap-6 xl:grid-cols-2">
                   <div className="rounded-xl border border-signal-line bg-signal-surface p-5">

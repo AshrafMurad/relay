@@ -272,7 +272,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
           <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-signal-amber">Workspace unavailable</p>
           <h1 className="mt-3 text-xl font-semibold">This workspace could not be opened</h1>
           <p className="mt-2 text-sm text-signal-muted">{error || "Your membership may have changed."}</p>
-          <Button className="mt-5" render={<Link href="/" />}>Return home</Button>
+          <Button className="mt-5" nativeButton={false} render={<Link href="/" />}>Return home</Button>
         </section>
       </main>
     )
