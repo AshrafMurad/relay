@@ -17,6 +17,10 @@ describe("message content validation", () => {
     }) as ApiError);
   });
 
+  it("allows empty content when attachments are present", () => {
+    expect(normalizeMessageContent(" ", 1)).toBe("");
+  });
+
   it("counts Unicode code points rather than UTF-16 units", () => {
     expect(normalizeMessageContent("😀".repeat(4_000))).toHaveLength(8_000);
     expect(() => normalizeMessageContent("😀".repeat(4_001))).toThrowError(expect.objectContaining({

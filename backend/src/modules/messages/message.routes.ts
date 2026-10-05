@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ApiError } from "../../lib/api-error.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { createUserRateLimit } from "../../middleware/rate-limit.js";
 import {
   channelMessageParamsSchema,
   conversationReadSchema,
@@ -48,7 +49,7 @@ export function createChannelMessageRouter(prisma: PrismaClient) {
     response.json(history);
   }));
 
-  router.post("/:channelId/messages", asyncHandler(async (request, response) => {
+  router.post("/:channelId/messages", createUserRateLimit(30, 10_000, "MESSAGE_SEND_RATE_LIMITED"), createUserRateLimit(300, 5 * 60_000, "MESSAGE_SEND_RATE_LIMITED"), asyncHandler(async (request, response) => {
     const { channelId } = parse(channelMessageParamsSchema, request.params);
     const input = parse(createMessageSchema, request.body);
     const result = await createChannelMessage(prisma, channelId, request.authUser!.id, input);
@@ -82,7 +83,7 @@ export function createMessageRouter(prisma: PrismaClient) {
     response.json({ message });
   }));
 
-  router.post("/:messageId/reactions", asyncHandler(async (request, response) => {
+  router.post("/:messageId/reactions", createUserRateLimit(60, 60_000), asyncHandler(async (request, response) => {
     const { messageId } = parse(messageParamsSchema, request.params);
     const input = parse(reactionToggleSchema, request.body);
     const result = await toggleMessageReaction(prisma, messageId, request.authUser!.id, input);
@@ -103,7 +104,7 @@ export function createDirectMessageRouter(prisma: PrismaClient) {
     response.json(history);
   }));
 
-  router.post("/:conversationId/messages", asyncHandler(async (request, response) => {
+  router.post("/:conversationId/messages", createUserRateLimit(30, 10_000, "MESSAGE_SEND_RATE_LIMITED"), createUserRateLimit(300, 5 * 60_000, "MESSAGE_SEND_RATE_LIMITED"), asyncHandler(async (request, response) => {
     const { conversationId } = parse(directMessageParamsSchema, request.params);
     const input = parse(createMessageSchema, request.body);
     const result = await createDirectMessage(prisma, conversationId, request.authUser!.id, input);

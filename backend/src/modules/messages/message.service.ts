@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/api-error.js";
 import { requireAccessibleDirectConversation } from "../direct-conversations/direct-conversation.service.js";
 import {
   MESSAGE_MAX_CODE_POINTS,
+  type AttachmentDTO,
   type ConversationReadInput,
   type ConversationReadStateDTO,
   type CreateMessageInput,
@@ -13,7 +14,10 @@ import {
   type MessageHistoryDTO,
   type ReactionSummaryDTO,
   type ReactionToggleInput,
+  type SearchMessagesDTO,
 } from "./message.contracts.js";
+
+export type SyncEventType = "message:create" | "message:update" | "message:delete" | "reaction:update" | "conversation:read:update";
 
 const historyCursorSchema = z.object({
   v: z.literal(1),
@@ -21,7 +25,9 @@ const historyCursorSchema = z.object({
   id: z.string().uuid(),
 }).strict();
 
-const messageSelect = {
+const searchCursorSchema = z.object({ v: z.literal(1), rank: z.number(), createdAt: z.string().datetime({ offset: true }), id: z.string().uuid() }).strict();
+
+export const messageSelect = {
   id: true,
   workspaceId: true,
   channelId: true,
@@ -42,6 +48,11 @@ const messageSelect = {
       author: { select: { name: true } },
     },
   },
+  attachments: {
+    where: { status: "ATTACHED" },
+    select: { id: true, originalFilename: true, mimeType: true, sizeBytes: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  },
   reactions: { select: { emoji: true, userId: true } },
 } satisfies Prisma.MessageSelect;
 
@@ -57,6 +68,17 @@ interface LockedChannel {
 interface LockedDirectConversation {
   id: string;
   workspaceId: string;
+}
+
+function toAttachmentDTO(attachment: { id: string; originalFilename: string; mimeType: string; sizeBytes: bigint; createdAt: Date }): AttachmentDTO {
+  return {
+    id: attachment.id,
+    originalFilename: attachment.originalFilename,
+    mimeType: attachment.mimeType,
+    sizeBytes: Number(attachment.sizeBytes),
+    downloadUrl: `/attachments/${attachment.id}/download`,
+    createdAt: attachment.createdAt.toISOString(),
+  };
 }
 
 function summarizeReactions(reactions: Array<{ emoji: string; userId: string }>, viewerId: string): ReactionSummaryDTO[] {
@@ -86,6 +108,7 @@ function toMessageDTO(message: MessageRecord, viewerId: string): MessageDTO {
       content: message.parent.content,
       deletedAt: message.parent.deletedAt?.toISOString() ?? null,
     },
+    attachments: message.attachments.map(toAttachmentDTO),
     reactions: summarizeReactions(message.reactions, viewerId),
     editedAt: message.editedAt?.toISOString() ?? null,
     deletedAt: message.deletedAt?.toISOString() ?? null,
@@ -94,15 +117,52 @@ function toMessageDTO(message: MessageRecord, viewerId: string): MessageDTO {
   };
 }
 
-export function normalizeMessageContent(content: string) {
+export function normalizeMessageContent(content: string, attachmentCount = 0) {
   const normalized = content.trim();
-  if (normalized.length === 0) {
+  if (normalized.length === 0 && attachmentCount === 0) {
     throw new ApiError(400, "MESSAGE_EMPTY", "Message content cannot be empty.");
   }
   if ([...normalized].length > MESSAGE_MAX_CODE_POINTS) {
     throw new ApiError(400, "MESSAGE_TOO_LONG", "Message content cannot exceed 4,000 Unicode code points.");
   }
   return normalized;
+}
+
+async function appendSyncEvent(
+  prisma: Transaction,
+  input: { workspaceId: string; eventType: SyncEventType; channelId?: string | null; directConversationId?: string | null; messageId?: string | null; userId?: string | null },
+) {
+  return prisma.workspaceSyncEvent.create({
+    data: {
+      workspaceId: input.workspaceId,
+      eventType: input.eventType,
+      channelId: input.channelId ?? null,
+      directConversationId: input.directConversationId ?? null,
+      messageId: input.messageId ?? null,
+      userId: input.userId ?? null,
+    },
+    select: { sequence: true },
+  });
+}
+
+async function attachPendingUploads(
+  prisma: Transaction,
+  input: { attachmentIds: string[]; workspaceId: string; uploaderId: string; messageId: string },
+) {
+  if (input.attachmentIds.length === 0) return;
+  const uniqueIds = [...new Set(input.attachmentIds)];
+  if (uniqueIds.length !== input.attachmentIds.length) throw new ApiError(400, "ATTACHMENT_LIMIT_EXCEEDED", "Duplicate attachments are not allowed.");
+  const attachments = await prisma.attachment.findMany({
+    where: { id: { in: uniqueIds }, workspaceId: input.workspaceId, uploaderId: input.uploaderId, status: "PENDING" },
+    select: { id: true, sizeBytes: true },
+  });
+  if (attachments.length !== uniqueIds.length) throw new ApiError(400, "ATTACHMENT_NOT_FOUND", "One or more attachments are unavailable.");
+  const totalBytes = attachments.reduce((sum, attachment) => sum + attachment.sizeBytes, 0n);
+  if (totalBytes > 50n * 1024n * 1024n) throw new ApiError(400, "ATTACHMENT_LIMIT_EXCEEDED", "Message attachments exceed the combined size limit.");
+  await prisma.attachment.updateMany({
+    where: { id: { in: uniqueIds }, workspaceId: input.workspaceId, uploaderId: input.uploaderId, status: "PENDING" },
+    data: { messageId: input.messageId, status: "ATTACHED", attachedAt: new Date(), expiresAt: null },
+  });
 }
 
 export function encodeMessageCursor(createdAt: Date, id: string) {
@@ -120,6 +180,19 @@ export function decodeMessageCursor(cursor: string) {
     return { createdAt, id: parsed.id };
   } catch {
     throw new ApiError(400, "INVALID_CURSOR", "Message history cursor is invalid.");
+  }
+}
+
+function encodeSearchCursor(rank: number, createdAt: Date, id: string) {
+  return Buffer.from(JSON.stringify({ v: 1, rank, createdAt: createdAt.toISOString(), id }), "utf8").toString("base64url");
+}
+
+function decodeSearchCursor(cursor: string) {
+  try {
+    const parsed = searchCursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
+    return { rank: parsed.rank, createdAt: new Date(parsed.createdAt), id: parsed.id };
+  } catch {
+    throw new ApiError(400, "INVALID_CURSOR", "Search cursor is invalid.");
   }
 }
 
@@ -265,13 +338,60 @@ export async function listDirectMessages(
   };
 }
 
+export async function searchMessages(
+  prisma: PrismaClient,
+  workspaceId: string,
+  userId: string,
+  input: { q: string; limit: number; cursor?: string },
+): Promise<SearchMessagesDTO> {
+  const query = input.q.trim();
+  if (query.length < 2) throw new ApiError(400, "VALIDATION_ERROR", "Search query must be at least 2 characters.");
+  const membership = await prisma.workspaceMember.findFirst({ where: { workspaceId, userId, status: "ACTIVE" }, select: { id: true } });
+  if (!membership) throw new ApiError(404, "WORKSPACE_NOT_FOUND", "Workspace was not found.");
+  const cursor = input.cursor ? decodeSearchCursor(input.cursor) : undefined;
+  const rows = await prisma.$queryRaw<Array<{ id: string; rank: number; createdAt: Date }>>(Prisma.sql`
+    WITH search AS (
+      SELECT m."id", m."createdAt",
+        ts_rank_cd(to_tsvector('simple', m."content"), plainto_tsquery('simple', ${query})) AS rank
+      FROM "Message" m
+      LEFT JOIN "DirectConversationMember" dcm
+        ON dcm."conversationId" = m."directConversationId"
+        AND dcm."userId" = ${userId}::uuid
+      WHERE m."workspaceId" = ${workspaceId}::uuid
+        AND m."deletedAt" IS NULL
+        AND m."content" <> ''
+        AND (m."channelId" IS NOT NULL OR dcm."id" IS NOT NULL)
+        AND to_tsvector('simple', m."content") @@ plainto_tsquery('simple', ${query})
+    )
+    SELECT "id", "rank", "createdAt"
+    FROM search
+    ${cursor ? Prisma.sql`WHERE (rank, "createdAt", id) < (${cursor.rank}, ${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)` : Prisma.empty}
+    ORDER BY rank DESC, "createdAt" DESC, id DESC
+    LIMIT ${input.limit + 1}
+  `);
+  const hasMore = rows.length > input.limit;
+  const page = rows.slice(0, input.limit);
+  const messages = page.length === 0 ? [] : await prisma.message.findMany({ where: { id: { in: page.map((row) => row.id) } }, select: messageSelect });
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const last = page.at(-1);
+  return {
+    results: page.flatMap((row) => {
+      const message = byId.get(row.id);
+      return message ? [toMessageDTO(message, userId)] : [];
+    }),
+    nextCursor: hasMore && last ? encodeSearchCursor(last.rank, last.createdAt, last.id) : null,
+    hasMore,
+  };
+}
+
 export async function createChannelMessage(
   prisma: PrismaClient,
   channelId: string,
   authorId: string,
   input: CreateMessageInput,
-): Promise<{ message: MessageDTO; created: boolean }> {
-  const content = normalizeMessageContent(input.content);
+): Promise<{ message: MessageDTO; created: boolean; sequence: string | null }> {
+  const attachmentIds = input.attachmentIds ?? [];
+  const content = normalizeMessageContent(input.content, attachmentIds.length);
   try {
     return await prisma.$transaction(async (transaction) => {
       const channel = await lockAccessibleChannel(transaction, channelId, authorId);
@@ -283,7 +403,7 @@ export async function createChannelMessage(
         if (replay.channelId !== channel.id || replay.workspaceId !== channel.workspaceId) {
           throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
         }
-        return { message: toMessageDTO(replay, authorId), created: false };
+        return { message: toMessageDTO(replay, authorId), created: false, sequence: null };
       }
       if (channel.archivedAt) throw new ApiError(409, "CHANNEL_ARCHIVED", "Archived channels are read-only.");
       if (input.parentMessageId) {
@@ -305,7 +425,10 @@ export async function createChannelMessage(
         },
         select: messageSelect,
       });
-      return { message: toMessageDTO(message, authorId), created: true };
+      await attachPendingUploads(transaction, { attachmentIds, workspaceId: channel.workspaceId, uploaderId: authorId, messageId: message.id });
+      const event = await appendSyncEvent(transaction, { workspaceId: channel.workspaceId, eventType: "message:create", channelId: channel.id, messageId: message.id, userId: authorId });
+      const canonical = await transaction.message.findUniqueOrThrow({ where: { id: message.id }, select: messageSelect });
+      return { message: toMessageDTO(canonical, authorId), created: true, sequence: event.sequence.toString() };
     });
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
@@ -317,7 +440,7 @@ export async function createChannelMessage(
     if (!existing || existing.channelId !== channel.id || existing.workspaceId !== channel.workspaceId) {
       throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
     }
-    return { message: toMessageDTO(existing, authorId), created: false };
+    return { message: toMessageDTO(existing, authorId), created: false, sequence: null };
   }
 }
 
@@ -326,8 +449,9 @@ export async function createDirectMessage(
   conversationId: string,
   authorId: string,
   input: CreateMessageInput,
-): Promise<{ message: MessageDTO; created: boolean }> {
-  const content = normalizeMessageContent(input.content);
+): Promise<{ message: MessageDTO; created: boolean; sequence: string | null }> {
+  const attachmentIds = input.attachmentIds ?? [];
+  const content = normalizeMessageContent(input.content, attachmentIds.length);
   try {
     return await prisma.$transaction(async (transaction) => {
       const conversation = await lockAccessibleDirectConversation(transaction, conversationId, authorId);
@@ -339,7 +463,7 @@ export async function createDirectMessage(
         if (replay.directConversationId !== conversation.id || replay.workspaceId !== conversation.workspaceId) {
           throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
         }
-        return { message: toMessageDTO(replay, authorId), created: false };
+        return { message: toMessageDTO(replay, authorId), created: false, sequence: null };
       }
       if (input.parentMessageId) {
         const parent = await transaction.message.findFirst({
@@ -360,7 +484,10 @@ export async function createDirectMessage(
         },
         select: messageSelect,
       });
-      return { message: toMessageDTO(message, authorId), created: true };
+      await attachPendingUploads(transaction, { attachmentIds, workspaceId: conversation.workspaceId, uploaderId: authorId, messageId: message.id });
+      const event = await appendSyncEvent(transaction, { workspaceId: conversation.workspaceId, eventType: "message:create", directConversationId: conversation.id, messageId: message.id, userId: authorId });
+      const canonical = await transaction.message.findUniqueOrThrow({ where: { id: message.id }, select: messageSelect });
+      return { message: toMessageDTO(canonical, authorId), created: true, sequence: event.sequence.toString() };
     });
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
@@ -372,7 +499,7 @@ export async function createDirectMessage(
     if (!existing || existing.directConversationId !== conversation.id || existing.workspaceId !== conversation.workspaceId) {
       throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
     }
-    return { message: toMessageDTO(existing, authorId), created: false };
+    return { message: toMessageDTO(existing, authorId), created: false, sequence: null };
   }
 }
 
@@ -388,6 +515,7 @@ export async function editMessage(prisma: PrismaClient, messageId: string, autho
       data: { content, editedAt: new Date() },
       select: messageSelect,
     });
+    await appendSyncEvent(transaction, { workspaceId: message.workspaceId, eventType: "message:update", channelId: message.channelId, directConversationId: message.directConversationId, messageId: message.id, userId: authorId });
     return toMessageDTO(message, authorId);
   });
 }
@@ -402,6 +530,7 @@ export async function deleteMessage(prisma: PrismaClient, messageId: string, aut
       data: { content: "", deletedAt: new Date() },
       select: messageSelect,
     });
+    await appendSyncEvent(transaction, { workspaceId: message.workspaceId, eventType: "message:delete", channelId: message.channelId, directConversationId: message.directConversationId, messageId: message.id, userId: authorId });
     return toMessageDTO(message, authorId);
   });
 }
@@ -422,7 +551,8 @@ export async function toggleMessageReaction(prisma: PrismaClient, messageId: str
       await transaction.messageReaction.create({ data: { messageId: existing.id, userId, emoji: input.emoji } });
     }
     const reactions = await transaction.messageReaction.findMany({ where: { messageId: existing.id }, select: { emoji: true, userId: true } });
-    return { messageId: existing.id, conversation, reactions: summarizeReactions(reactions, userId) };
+    const event = await appendSyncEvent(transaction, { workspaceId: conversation.workspaceId, eventType: "reaction:update", channelId: existing.channelId, directConversationId: existing.directConversationId, messageId: existing.id, userId });
+    return { messageId: existing.id, conversation, reactions: summarizeReactions(reactions, userId), sequence: event.sequence.toString() };
   });
 }
 
@@ -460,6 +590,7 @@ export async function markChannelRead(prisma: PrismaClient, channelId: string, u
       create: { channelId: channel.id, userId, lastReadMessageId: message.id },
       update: { lastReadMessageId: message.id, lastReadAt: new Date() },
     });
+    await appendSyncEvent(transaction, { workspaceId: channel.workspaceId, eventType: "conversation:read:update", channelId: channel.id, messageId: message.id, userId });
     return toReadStateDTO({ workspaceId: channel.workspaceId, type: "channel", id: channel.id, userId, lastReadMessageId: readState.lastReadMessageId!, lastReadAt: readState.lastReadAt });
   });
 }
@@ -481,6 +612,9 @@ export async function markDirectConversationRead(prisma: PrismaClient, conversat
       create: { directConversationId: conversation.id, userId, lastReadMessageId: message.id },
       update: { lastReadMessageId: message.id, lastReadAt: new Date() },
     });
+    await appendSyncEvent(transaction, { workspaceId: conversation.workspaceId, eventType: "conversation:read:update", directConversationId: conversation.id, messageId: message.id, userId });
     return toReadStateDTO({ workspaceId: conversation.workspaceId, type: "dm", id: conversation.id, userId, lastReadMessageId: readState.lastReadMessageId!, lastReadAt: readState.lastReadAt });
   });
 }
+
+export { toMessageDTO };

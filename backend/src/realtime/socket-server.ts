@@ -37,7 +37,7 @@ function workspaceRoom(workspaceId: string) {
   return `workspace:${workspaceId}`;
 }
 
-function messageSequence(message: { createdAt: string; id: string }) {
+function fallbackMessageSequence(message: { createdAt: string; id: string }) {
   return `${message.createdAt}:${message.id}`;
 }
 
@@ -207,12 +207,13 @@ export function createSocketServer(
           operationId: event.operationId,
           content: event.content,
           parentMessageId: event.parentMessageId,
+          attachmentIds: event.attachmentIds,
         });
         if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Socket event data is invalid.");
         const result = conversation.type === "channel"
           ? await createChannelMessage(prisma, conversation.id, socket.data.userId, parsed.data)
           : await createDirectMessage(prisma, conversation.id, socket.data.userId, parsed.data);
-        const sequence = messageSequence(result.message);
+        const sequence = result.sequence ?? fallbackMessageSequence(result.message);
         socket.emit("message:ack", { operationId: result.message.operationId, sequence, message: result.message });
         if (result.created) {
           socket.to(conversation.room).emit("message:new", { sequence, message: result.message });
@@ -236,7 +237,7 @@ export function createSocketServer(
         const result = await toggleMessageReaction(prisma, event.messageId, socket.data.userId, parsed.data);
         if (result.conversation.workspaceId !== event.workspaceId) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
         io.to(result.conversation.room).emit("reaction:update", {
-          sequence: `${new Date().toISOString()}:${result.messageId}:reaction`,
+          sequence: result.sequence,
           workspaceId: result.conversation.workspaceId,
           conversation: { type: result.conversation.type, id: result.conversation.id },
           messageId: result.messageId,

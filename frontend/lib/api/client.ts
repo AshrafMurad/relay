@@ -10,6 +10,8 @@ const environment = parsePublicEnvironment({
   NODE_ENV: process.env.NODE_ENV,
 })
 
+export const API_BASE_URL = environment.NEXT_PUBLIC_API_URL
+
 export class ApiClientError extends Error {
   constructor(
     public readonly code: string,
@@ -33,14 +35,13 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
 
   let response: Response
   try {
+    const headers = new Headers(init.headers)
+    if (!(init.body instanceof FormData) && !headers.has("content-type")) headers.set("content-type", "application/json")
     response = await fetch(`${environment.NEXT_PUBLIC_API_URL}${path}`, {
       ...init,
       signal: controller.signal,
       credentials: "include",
-      headers: {
-        "content-type": "application/json",
-        ...init.headers,
-      },
+      headers,
     })
   } catch (caught) {
     if (timedOut) {

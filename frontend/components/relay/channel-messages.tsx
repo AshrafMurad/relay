@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import { AlertCircle, CornerUpLeft, MoreHorizontal, Pencil, RotateCcw, Send, SmilePlus, Trash2, X } from "lucide-react"
+import { AlertCircle, CornerUpLeft, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, SmilePlus, Trash2, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -13,8 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Textarea } from "@/components/ui/textarea"
-import { apiRequest } from "@/lib/api/client"
-import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, ReactionSummaryDTO, TypingUpdateEvent } from "@/lib/api/contracts"
+import { API_BASE_URL, apiRequest } from "@/lib/api/client"
+import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, PendingAttachmentDTO, ReactionSummaryDTO, TypingUpdateEvent } from "@/lib/api/contracts"
 import {
   MESSAGE_CODE_POINT_LIMIT,
   createOptimisticMessage,
@@ -56,6 +56,11 @@ function ReplyPreview({ message }: { message: ClientMessage }) {
       </p>
     </div>
   )
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function MessageRow({
@@ -132,6 +137,17 @@ function MessageRow({
         ) : (
           <p className="max-w-[72ch] whitespace-pre-wrap break-words text-xs leading-5">{message.content}</p>
         )}
+        {message.attachments.length > 0 && !message.deletedAt && (
+          <div className="mt-2 flex max-w-[72ch] flex-wrap gap-2">
+            {message.attachments.map((attachment) => (
+              <a className="inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-surface px-2.5 py-1.5 text-[11px] hover:border-signal-cyan" href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id} rel="noreferrer" target="_blank">
+                <Paperclip className="size-3" />
+                <span className="max-w-48 truncate">{attachment.originalFilename}</span>
+                <span className="text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span>
+              </a>
+            ))}
+          </div>
+        )}
         {message.delivery === "failed" && !archived && (
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-destructive" role="alert">
             <AlertCircle className="size-3" />
@@ -191,6 +207,8 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
   const [hasMore, setHasMore] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [draft, setDraft] = useState("")
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachmentDTO[]>([])
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [composerError, setComposerError] = useState("")
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null)
   const [socketState, setSocketState] = useState<SocketState>("connecting")
@@ -390,12 +408,15 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
       conversation: { type: target.type, id: conversationId },
       content: clientMessage.content,
       ...(clientMessage.parentMessageId ? { parentMessageId: clientMessage.parentMessageId } : {}),
+      ...(clientMessage.attachments.length > 0 ? { attachmentIds: clientMessage.attachments.map((attachment) => attachment.id) } : {}),
     })
   }
 
   function submitMessage() {
     if (archived) return
-    const parsed = validateMessageContent(draft)
+    const parsed = draft.trim() || pendingAttachments.length === 0
+      ? validateMessageContent(draft)
+      : { success: true as const, content: "", codePoints: 0 }
     if (!parsed.success) {
       setComposerError(parsed.message)
       return
@@ -412,13 +433,42 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
       user,
       workspaceId,
     })
+    optimistic.attachments = pendingAttachments.map((attachment) => ({
+      id: attachment.id,
+      originalFilename: attachment.originalFilename,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      downloadUrl: `/attachments/${attachment.id}/download`,
+      createdAt: attachment.createdAt,
+    }))
     setMessages((current) => mergeMessages(current, [optimistic]))
     setDraft("")
+    setPendingAttachments([])
     setReplyingTo(null)
     setComposerError("")
     socketRef.current?.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })
     shouldScrollToBottom.current = true
     sendMessage(optimistic)
+  }
+
+  async function uploadAttachment(file: File) {
+    if (pendingAttachments.length >= 5) {
+      setComposerError("A message can include at most 5 attachments.")
+      return
+    }
+    setUploadingAttachment(true)
+    setComposerError("")
+    try {
+      const form = new FormData()
+      form.set("workspaceId", workspaceId)
+      form.set("file", file)
+      const response = await apiRequest<{ attachment: PendingAttachmentDTO }>("/attachments", { method: "POST", body: form })
+      setPendingAttachments((current) => [...current, response.attachment])
+    } catch (caught) {
+      setComposerError(messageError(caught, "File could not be uploaded."))
+    } finally {
+      setUploadingAttachment(false)
+    }
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -544,11 +594,26 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
                 placeholder={`Message ${title}`}
                 value={draft}
               />
+              {pendingAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 border-t border-signal-line px-3 py-2">
+                  {pendingAttachments.map((attachment) => (
+                    <span className="inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1 text-[11px]" key={attachment.id}>
+                      <Paperclip className="size-3" />
+                      <span className="max-w-40 truncate">{attachment.originalFilename}</span>
+                      <button className="text-signal-muted hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button">Remove</button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex min-h-9 items-center gap-3 border-t border-signal-line px-2.5">
+                <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[10px] text-signal-muted hover:text-signal-ink", uploadingAttachment && "pointer-events-none opacity-50")}> 
+                  <Paperclip className="size-3" /> {uploadingAttachment ? "Uploading" : "Attach"}
+                  <input className="sr-only" disabled={uploadingAttachment || pendingAttachments.length >= 5} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.currentTarget.value = "" }} type="file" />
+                </label>
                 <span className={cn("font-mono text-[9px] tabular-nums text-signal-muted", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
                 <span className="hidden text-[9px] text-signal-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
                 <span className="text-[9px] text-signal-muted" aria-live="polite">{socketState === "connected" ? "Live" : socketState === "connecting" ? "Connecting..." : "Offline"}</span>
-                <Button aria-label="Send message" className="ml-auto size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={!draft.trim() || draftCodePoints > MESSAGE_CODE_POINT_LIMIT} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
+                <Button aria-label="Send message" className="ml-auto size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
               </div>
             </div>
             {composerError && <p className="mt-1.5 text-[11px] text-destructive" id="composer-error" role="alert">{composerError}</p>}

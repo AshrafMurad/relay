@@ -12,11 +12,14 @@ import type { DependencyProbe } from "./lib/database.js";
 import type { Logger } from "./lib/logger.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { createUserRateLimit } from "./middleware/rate-limit.js";
+import { createAttachmentRouter } from "./modules/attachments/attachment.routes.js";
 import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { createChannelRouter } from "./modules/channels/channel.routes.js";
 import { createDirectConversationRouter } from "./modules/direct-conversations/direct-conversation.routes.js";
 import { createChannelMessageRouter, createDirectMessageRouter, createMessageRouter } from "./modules/messages/message.routes.js";
+import { createSearchRouter } from "./modules/search/search.routes.js";
 import { createWorkspaceRouter } from "./modules/workspaces/workspace.routes.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -65,6 +68,7 @@ export function createApp(
 
   if (dependencies.database.prisma) {
     app.use(createAuthMiddleware(dependencies.database.prisma));
+    app.use(createUserRateLimit(300, 60_000));
     app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
     app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma));
     app.use("/api", createDirectConversationRouter(dependencies.database.prisma));
@@ -72,6 +76,8 @@ export function createApp(
     app.use("/api/channels", createChannelMessageRouter(dependencies.database.prisma));
     app.use("/api/direct-conversations", createDirectMessageRouter(dependencies.database.prisma));
     app.use("/api/messages", createMessageRouter(dependencies.database.prisma));
+    app.use("/api/search", createSearchRouter(dependencies.database.prisma));
+    app.use("/api/attachments", createAttachmentRouter(dependencies.database.prisma, environment.UPLOAD_DIR));
   }
 
   app.use("/api/health", createHealthRouter(dependencies.database, dependencies.redis));

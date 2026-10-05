@@ -104,11 +104,31 @@ export interface MessageDTO {
     content: string;
     deletedAt: string | null;
   } | null;
+  attachments: AttachmentDTO[];
   reactions: ReactionSummaryDTO[];
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AttachmentDTO {
+  id: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  downloadUrl: string;
+  createdAt: string;
+}
+
+export interface PendingAttachmentDTO {
+  id: string;
+  workspaceId: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  expiresAt: string;
 }
 
 export interface ReactionSummaryDTO {
@@ -139,6 +159,13 @@ export interface MessageSendEvent {
   conversation: ConversationRef;
   content: string;
   parentMessageId?: string | null;
+  attachmentIds?: string[];
+}
+
+export interface SearchMessagesResponse {
+  results: MessageDTO[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface MessageAckEvent {

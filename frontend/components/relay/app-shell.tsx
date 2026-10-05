@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, usePathname, useRouter } from "next/navigation"
 import { startTransition, useEffect, useState, type FormEvent, type ReactNode } from "react"
 import {
   Archive,
@@ -13,6 +13,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   SunMoon,
   UserRound,
 } from "lucide-react"
@@ -78,6 +79,7 @@ function LoadingShell() {
 
 export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode; workspaceSlug: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams<{ channelId?: string | string[]; conversationId?: string | string[] }>()
   const channelId = typeof params.channelId === "string" ? params.channelId : null
   const conversationId = typeof params.conversationId === "string" ? params.conversationId : null
@@ -142,10 +144,10 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
   }, [router, workspaceSlug])
 
   useEffect(() => {
-    if (state !== "ready" || channelId || conversationId || !workspace || channels.length === 0) return
+    if (state !== "ready" || channelId || conversationId || pathname.endsWith("/search") || !workspace || channels.length === 0) return
     const first = channels.find((channel) => !channel.archivedAt) ?? channels[0]
     startTransition(() => router.replace(`/app/${workspace.slug}/channels/${first.id}`))
-  }, [channelId, conversationId, channels, router, state, workspace])
+  }, [channelId, conversationId, channels, pathname, router, state, workspace])
 
   async function openDirectMessage(otherUserId: string) {
     if (!workspace) return
@@ -288,6 +290,9 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-3">
+          <Link className={cn("mb-2 flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors", pathname.endsWith("/search") ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text")} href={`/app/${workspace.slug}/search`} onClick={() => setNavigationOpen(false)}>
+            <Search className="size-3.5" /> Search messages
+          </Link>
           <div className="flex h-9 items-center justify-between px-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal-panel-muted">Channels</p>

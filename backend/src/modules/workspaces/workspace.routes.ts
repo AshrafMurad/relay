@@ -7,6 +7,7 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createChannelSchema } from "../channels/channel.contracts.js";
 import { createChannel, listChannels } from "../channels/channel.service.js";
+import { getWorkspaceSync, syncQuerySchema } from "../sync/sync.service.js";
 import { acceptInvitation, createInvitation, createWorkspace, getWorkspace, listInvitations, listMembers, listWorkspaces } from "./workspace.service.js";
 
 const createWorkspaceSchema = z.object({
@@ -54,6 +55,13 @@ export function createWorkspaceRouter(prisma: PrismaClient) {
     const { workspaceId } = parse(paramsSchema, request.params);
     const channels = await listChannels(prisma, workspaceId, request.authUser!.id);
     response.json({ channels });
+  }));
+
+  router.get("/:workspaceId/sync", asyncHandler(async (request, response) => {
+    const { workspaceId } = parse(paramsSchema, request.params);
+    const query = parse(syncQuerySchema, request.query);
+    const sync = await getWorkspaceSync(prisma, workspaceId, request.authUser!.id, query);
+    response.json(sync);
   }));
 
   router.post("/:workspaceId/channels", asyncHandler(async (request, response) => {

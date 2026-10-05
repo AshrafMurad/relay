@@ -24,6 +24,7 @@ export interface MessageSendEvent {
   conversation: ConversationRef;
   content: string;
   parentMessageId?: string | null;
+  attachmentIds?: string[];
 }
 
 export interface MessageAckEvent {

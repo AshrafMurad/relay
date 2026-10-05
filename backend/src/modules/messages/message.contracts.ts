@@ -8,6 +8,7 @@ export const createMessageSchema = z.object({
   operationId: z.string().uuid(),
   content: z.string(),
   parentMessageId: z.string().uuid().nullable().optional(),
+  attachmentIds: z.array(z.string().uuid()).max(5).optional(),
 });
 
 export const editMessageSchema = z.object({ content: z.string() });
@@ -33,6 +34,15 @@ export interface ReactionSummaryDTO {
   reactedByMe: boolean;
 }
 
+export interface AttachmentDTO {
+  id: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  downloadUrl: string;
+  createdAt: string;
+}
+
 export interface ConversationReadStateDTO {
   workspaceId: string;
   conversation: { type: "channel" | "dm"; id: string };
@@ -51,11 +61,18 @@ export interface MessageDTO {
   content: string;
   parentMessageId: string | null;
   parent: { id: string; authorName: string; content: string; deletedAt: string | null } | null;
+  attachments: AttachmentDTO[];
   reactions: ReactionSummaryDTO[];
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SearchMessagesDTO {
+  results: MessageDTO[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface MessageHistoryDTO {

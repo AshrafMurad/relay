@@ -18,6 +18,11 @@ enum WorkspaceMemberStatus {
   REMOVED
 }
 
+enum AttachmentStatus {
+  PENDING
+  ATTACHED
+}
+
 model User {
   id            String   @id @default(uuid()) @db.Uuid
   email         String   @unique
@@ -40,6 +45,7 @@ model User {
   reactions            MessageReaction[]
   channelReadStates    ChannelReadState[]
   directReadStates     DirectConversationReadState[]
+  attachments          Attachment[]
 }
 
 model Account {
@@ -100,6 +106,8 @@ model Workspace {
   channels    Channel[]
   messages    Message[]
   directConversations DirectConversation[]
+  attachments Attachment[]
+  syncEvents WorkspaceSyncEvent[]
 }
 
 model WorkspaceMember {
@@ -212,6 +220,7 @@ model Message {
   parent    Message?  @relation("MessageReplies", fields: [parentMessageId], references: [id])
   replies   Message[] @relation("MessageReplies")
   reactions MessageReaction[]
+  attachments Attachment[]
   channelReadMarkers ChannelReadState[] @relation("ChannelLastReadMessage")
   directReadMarkers DirectConversationReadState[] @relation("DirectLastReadMessage")
 
@@ -221,6 +230,49 @@ model Message {
   @@index([workspaceId])
   @@index([parentMessageId])
   @@index([authorId])
+}
+
+model Attachment {
+  id               String           @id @default(uuid()) @db.Uuid
+  workspaceId      String           @db.Uuid
+  uploaderId       String           @db.Uuid
+  messageId        String?          @db.Uuid
+  originalFilename String
+  mimeType         String
+  sizeBytes        BigInt
+  storageKey       String           @unique
+  status           AttachmentStatus @default(PENDING)
+  expiresAt        DateTime?        @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  attachedAt       DateTime?        @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader  User      @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  message   Message?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([uploaderId, status, expiresAt])
+  @@index([messageId])
+}
+
+model WorkspaceSyncEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @db.Uuid
+  sequence     BigInt   @default(autoincrement())
+  eventType    String
+  channelId    String?  @db.Uuid
+  directConversationId String? @db.Uuid
+  messageId    String?  @db.Uuid
+  userId       String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, sequence])
+  @@index([workspaceId, sequence])
+  @@index([channelId])
+  @@index([directConversationId])
+  @@index([messageId])
 }
 
 model MessageReaction {

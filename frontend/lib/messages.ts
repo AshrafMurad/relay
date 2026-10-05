@@ -106,6 +106,7 @@ export function createOptimisticMessage({
       deletedAt: parent.deletedAt,
     } : null,
     reactions: [],
+    attachments: parent ? [] : [],
     editedAt: null,
     deletedAt: null,
     createdAt: now,

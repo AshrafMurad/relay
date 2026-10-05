@@ -8,7 +8,7 @@ import { createRelaySocket } from "@/lib/realtime/socket"
 
 import { ChannelMessages } from "./channel-messages"
 
-vi.mock("@/lib/api/client", () => ({ apiRequest: vi.fn() }))
+vi.mock("@/lib/api/client", () => ({ API_BASE_URL: "http://localhost:4000/api", apiRequest: vi.fn() }))
 vi.mock("@/lib/realtime/socket", () => ({ createRelaySocket: vi.fn() }))
 
 type SocketHandlerMap = {
@@ -75,6 +75,7 @@ function message(id: string, content: string, createdAt: string): MessageDTO {
     content,
     parentMessageId: null,
     parent: null,
+    attachments: [],
     reactions: [],
     editedAt: null,
     deletedAt: null,
@@ -152,5 +153,31 @@ describe("ChannelMessages", () => {
 
     await waitFor(() => expect(screen.queryByText("Sending...")).toBeNull())
     expect(screen.getByText("Socket hello")).toBeTruthy()
+  })
+
+  it("sends an attachment-only message after upload", async () => {
+    const userEvents = userEvent.setup()
+    const { sent } = mockSocket()
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({ messages: [], nextCursor: null, hasMore: false })
+      .mockResolvedValueOnce({
+        attachment: {
+          id: "11111111-1111-4111-8111-111111111111",
+          workspaceId: "workspace-1",
+          originalFilename: "notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 12,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          expiresAt: "2026-01-02T00:00:00.000Z",
+        },
+      })
+
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+    await screen.findByRole("log", { name: "Message history for #general" })
+    await userEvents.upload(screen.getByLabelText(/attach/i), new File(["hello"], "notes.txt", { type: "text/plain" }))
+    await screen.findByText("notes.txt")
+    await userEvents.click(screen.getByLabelText("Send message"))
+
+    expect(sent[0]).toMatchObject({ content: "", attachmentIds: ["11111111-1111-4111-8111-111111111111"] })
   })
 })
