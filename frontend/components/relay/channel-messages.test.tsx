@@ -143,7 +143,7 @@ describe("ChannelMessages", () => {
 
     expect(sent).toHaveLength(1)
     expect(sent[0]).toMatchObject({ workspaceId: "workspace-1", conversation: { type: "channel", id: "channel-active" }, content: "Socket hello" })
-    expect(await screen.findByText("Sending...")).toBeTruthy()
+    expect(await screen.findByText("Queued for delivery")).toBeTruthy()
 
     handlers["message:ack"]?.({
       operationId: sent[0]!.operationId,
@@ -151,7 +151,7 @@ describe("ChannelMessages", () => {
       message: { ...message("server-message", "Socket hello", "2026-01-04T00:00:00.000Z"), operationId: sent[0]!.operationId },
     })
 
-    await waitFor(() => expect(screen.queryByText("Sending...")).toBeNull())
+    await waitFor(() => expect(screen.queryByText("Queued for delivery")).toBeNull())
     expect(screen.getByText("Socket hello")).toBeTruthy()
   })
 

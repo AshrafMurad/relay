@@ -89,6 +89,7 @@ function MessageRow({
   const ownMessage = message.author.id === currentUserId
   const canAct = !archived && !message.deletedAt && !message.temporary
   const canReact = canAct && !editing
+  const deliveryLabel = message.delivery === "sending" ? "Queued for delivery" : message.delivery === "failed" ? "Delivery failed" : null
 
   async function submitEdit(event: FormEvent) {
     event.preventDefault()
@@ -110,7 +111,7 @@ function MessageRow({
   }
 
   return (
-    <article className={cn("group relative flex gap-3 px-5 py-2.5 transition-colors hover:bg-signal-surface/60 focus-within:bg-signal-surface/60 sm:px-7", message.delivery === "failed" && "bg-destructive/5")}>
+    <article className={cn("group relative flex gap-3 px-4 py-2.5 transition-colors hover:bg-signal-surface/60 focus-within:bg-signal-surface/60 sm:px-7", message.delivery === "failed" && "bg-destructive/5")}>
       <Avatar className="mt-0.5 size-8 rounded-lg">
         {message.author.image && <AvatarImage alt="" className="rounded-lg" src={message.author.image} />}
         <AvatarFallback className="rounded-lg bg-signal-surface-raised text-[9px] font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
@@ -120,7 +121,7 @@ function MessageRow({
           <span className="truncate text-xs font-semibold">{message.author.name}</span>
           <time className="shrink-0 font-mono text-[9px] tabular-nums text-signal-muted" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time>
           {message.editedAt && !message.deletedAt && <span className="text-[9px] text-signal-muted">edited</span>}
-          {message.delivery === "sending" && <span className="text-[9px] text-signal-muted">Sending...</span>}
+          {deliveryLabel && <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px]", message.delivery === "failed" ? "border-destructive/30 text-destructive" : "border-signal-cyan/30 text-signal-cyan-ink")}>{deliveryLabel}</span>}
         </div>
         <ReplyPreview message={message} />
         {editing ? (
@@ -160,7 +161,7 @@ function MessageRow({
             {message.reactions.map((reaction) => (
               <button
                 aria-pressed={reaction.reactedByMe}
-                className={cn("rounded-full border px-2 py-0.5 text-[11px] transition", reaction.reactedByMe ? "border-signal-amber bg-signal-amber/15 text-signal-amber" : "border-signal-line bg-signal-surface text-signal-muted hover:text-signal-ink")}
+                className={cn("rounded-full border px-2 py-0.5 text-[11px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30", reaction.reactedByMe ? "border-signal-cyan/40 bg-signal-cyan/10 text-signal-cyan-ink" : "border-signal-line bg-signal-surface text-signal-muted hover:border-signal-cyan/40 hover:text-signal-ink")}
                 disabled={!canReact}
                 key={reaction.emoji}
                 onClick={() => onReact(message, reaction.emoji)}
@@ -188,7 +189,7 @@ function MessageRow({
       )}
       {canReact && (
         <div className="absolute right-12 top-2 hidden gap-1 rounded-full border border-signal-line bg-signal-paper p-1 shadow-sm group-hover:flex group-focus-within:flex">
-          {QUICK_REACTIONS.map((emoji) => <button className="grid size-6 place-items-center rounded-full text-xs hover:bg-signal-surface" key={emoji} onClick={() => onReact(message, emoji)} type="button">{emoji}</button>)}
+          {QUICK_REACTIONS.map((emoji) => <button aria-label={`React with ${emoji}`} className="grid size-6 place-items-center rounded-full text-xs transition hover:bg-signal-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30" key={emoji} onClick={() => onReact(message, emoji)} type="button">{emoji}</button>)}
         </div>
       )}
     </article>
@@ -226,6 +227,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
   const conversationId = target.type === "channel" ? target.channel.id : target.conversation.id
   const workspaceId = target.type === "channel" ? target.channel.workspaceId : target.conversation.workspaceId
   const title = target.type === "channel" ? `#${target.channel.name}` : target.conversation.otherUser.name
+  const connectionCopy = socketState === "connected" ? "Signal clear" : socketState === "connecting" ? "Reconnecting" : "Offline"
   const historyPath = target.type === "channel" ? `/channels/${conversationId}/messages` : `/direct-conversations/${conversationId}/messages`
   const readPath = target.type === "channel" ? `/channels/${conversationId}/read` : `/direct-conversations/${conversationId}/read`
   const draftCodePoints = Array.from(draft.trim()).length
@@ -545,7 +547,19 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
       <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
         {historyState === "loading" && (
           <div className="grid min-h-full place-items-center p-6" role="status">
-            <div className="text-center"><p className="text-sm font-medium">Loading messages...</p><p className="mt-1 text-xs text-signal-muted">Opening the newest history.</p></div>
+            <div className="w-full max-w-xl space-y-3" aria-label="Loading message history">
+              {[0, 1, 2].map((item) => (
+                <div className="flex animate-pulse gap-3" key={item}>
+                  <div className="size-8 rounded-lg bg-signal-surface-raised" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-32 rounded bg-signal-surface-raised" />
+                    <div className="h-3 max-w-[72ch] rounded bg-signal-surface" />
+                    <div className="h-3 w-2/3 rounded bg-signal-surface" />
+                  </div>
+                </div>
+              ))}
+              <p className="text-center text-xs text-signal-muted">Opening the newest saved history.</p>
+            </div>
           </div>
         )}
         {historyState === "error" && (
@@ -558,7 +572,12 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
             {hasMore && <div className="flex justify-center px-5 pb-3"><Button disabled={loadingOlder} onClick={() => void loadOlder()} size="sm" variant="outline">{loadingOlder ? "Loading..." : "Load older messages"}</Button></div>}
             {historyError && <p className="mx-5 mb-3 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{historyError}</p>}
             {messages.length === 0 ? (
-              <div className="px-5 py-16 sm:px-7"><h2 className="text-lg font-semibold">Start the conversation</h2><p className="mt-1 max-w-md text-xs leading-5 text-signal-muted">Messages sent here are saved in {title}.</p></div>
+              <div className="px-4 py-16 sm:px-7">
+                <div className="max-w-md rounded-lg border border-dashed border-signal-line bg-signal-surface/45 px-4 py-5">
+                  <h2 className="text-sm font-semibold">Start the conversation</h2>
+                  <p className="mt-1 text-xs leading-5 text-signal-muted">Messages sent here are saved in {title} and recover after reconnect.</p>
+                </div>
+              </div>
             ) : messages.map((message, index) => (
               <div key={`${message.id}:${archived}`}>
                 {isFirstUnread(message, index) && <div className="my-2 flex items-center gap-3 px-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />Unread<span className="h-px flex-1 bg-signal-amber/35" /></div>}
@@ -571,7 +590,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
 
       <div className="shrink-0 border-t border-signal-line bg-signal-paper px-3 py-3 sm:px-5">
         {archived ? (
-          <div className="mx-auto max-w-6xl rounded-md border border-signal-line bg-signal-surface px-3 py-2.5 text-xs text-signal-muted">This channel is archived. Its history remains available, but messages and replies are read-only.</div>
+          <div className="mx-auto max-w-6xl rounded-md border border-signal-line bg-signal-surface px-3 py-2.5 text-xs text-signal-muted"><span className="font-semibold text-signal-ink">Read-only archive.</span> This channel history remains available, but messages, replies, reactions, and attachments are closed.</div>
         ) : (
           <div className="mx-auto max-w-6xl">
             {replyingTo && (
@@ -582,7 +601,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
               </div>
             )}
             <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
-              {typingUsers.length > 0 && <p className="border-b border-signal-line px-3 py-1.5 text-[11px] text-signal-muted" aria-live="polite">{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...</p>}
+              {typingUsers.length > 0 && <p className="border-b border-signal-line px-3 py-1.5 text-[11px] text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
               <Textarea
                 aria-label={`Message ${title}`}
                 aria-describedby={composerError ? "composer-error" : undefined}
@@ -612,7 +631,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
                 </label>
                 <span className={cn("font-mono text-[9px] tabular-nums text-signal-muted", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
                 <span className="hidden text-[9px] text-signal-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
-                <span className="text-[9px] text-signal-muted" aria-live="polite">{socketState === "connected" ? "Live" : socketState === "connecting" ? "Connecting..." : "Offline"}</span>
+                <span className={cn("inline-flex items-center gap-1 text-[9px]", socketState === "connected" ? "text-signal-cyan-ink" : "text-signal-muted")} aria-live="polite"><span className={cn("size-1.5 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} />{connectionCopy}</span>
                 <Button aria-label="Send message" className="ml-auto size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
               </div>
             </div>

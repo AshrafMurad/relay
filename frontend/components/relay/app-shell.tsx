@@ -68,10 +68,15 @@ function RelayMark() {
 
 function LoadingShell() {
   return (
-    <main className="grid h-dvh place-items-center bg-signal-paper text-signal-ink">
-      <div className="text-center" role="status">
-        <RelayMark />
-        <p className="mt-3 text-sm font-medium">Opening workspace...</p>
+    <main className="grid h-dvh place-items-center bg-signal-paper p-6 text-signal-ink">
+      <div className="w-full max-w-sm text-center" role="status">
+        <div className="mx-auto grid size-12 place-items-center rounded-lg bg-signal-carbon text-signal-amber"><RelayMark /></div>
+        <p className="mt-4 text-sm font-semibold">Opening workspace</p>
+        <p className="mt-1 text-xs text-signal-muted">Loading routes, members, and unread state.</p>
+        <div className="mt-5 space-y-2" aria-hidden="true">
+          <div className="mx-auto h-2 w-48 animate-pulse rounded bg-signal-surface-raised" />
+          <div className="mx-auto h-2 w-32 animate-pulse rounded bg-signal-surface-raised" />
+        </div>
       </div>
     </main>
   )
@@ -263,8 +268,9 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
     return (
       <main className="grid h-dvh place-items-center bg-signal-paper p-6 text-signal-ink">
         <section className="max-w-md text-center">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-signal-amber">Workspace unavailable</p>
-          <h1 className="mt-3 text-2xl font-semibold">This workspace could not be opened</h1>
+          <div className="mx-auto grid size-12 place-items-center rounded-lg bg-signal-carbon text-signal-amber"><RelayMark /></div>
+          <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-signal-amber">Workspace unavailable</p>
+          <h1 className="mt-3 text-xl font-semibold">This workspace could not be opened</h1>
           <p className="mt-2 text-sm text-signal-muted">{error || "Your membership may have changed."}</p>
           <Button className="mt-5" render={<Link href="/" />}>Return home</Button>
         </section>
@@ -290,7 +296,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-3">
-          <Link className={cn("mb-2 flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors", pathname.endsWith("/search") ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text")} href={`/app/${workspace.slug}/search`} onClick={() => setNavigationOpen(false)}>
+          <Link className={cn("mb-2 flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", pathname.endsWith("/search") ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text")} href={`/app/${workspace.slug}/search`} onClick={() => setNavigationOpen(false)}>
             <Search className="size-3.5" /> Search messages
           </Link>
           <div className="flex h-9 items-center justify-between px-2">
@@ -355,7 +361,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
             })}
             {members.filter((member) => member.userId !== user.id && !directConversations.some((conversation) => conversation.otherUser.id === member.userId)).map((member) => (
               <button
-                className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-signal-panel-muted transition-colors hover:bg-white/5 hover:text-signal-panel-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber"
+                className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-signal-panel-muted transition-colors hover:bg-white/5 hover:text-signal-panel-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber sm:min-h-8"
                 key={member.userId}
                 onClick={() => void openDirectMessage(member.userId)}
                 type="button"
@@ -399,7 +405,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
         <aside className="hidden min-w-0 border-r border-signal-line lg:block">{navigation}</aside>
 
         <main className="flex min-h-0 min-w-0 flex-col">
-          <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-signal-line px-3 sm:px-5">
+          <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-signal-line bg-signal-paper/95 px-3 sm:px-5">
             <Sheet onOpenChange={setNavigationOpen} open={navigationOpen}>
               <SheetTrigger render={<Button aria-label="Open navigation" className="lg:hidden" size="icon" type="button" variant="ghost" />}><Menu /></SheetTrigger>
               <SheetContent className="w-[min(88vw,320px)] gap-0 border-signal-line bg-signal-panel p-0" side="left">
@@ -427,7 +433,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
             )}
           </header>
 
-          {error && state === "ready" && <p className="border-b border-red-400/20 bg-red-500/10 px-5 py-2 text-xs text-red-200" role="alert">{error}</p>}
+          {error && state === "ready" && <p className="border-b border-destructive/25 bg-destructive/10 px-5 py-2 text-xs text-destructive" role="alert">{error}</p>}
 
           {selectedDirectConversation ? (
             <ChannelMessages key={selectedDirectConversation.id} onActivity={updateConversationActivity} onReadState={updateReadState} target={{ type: "dm", conversation: selectedDirectConversation }} user={user} />
@@ -436,9 +442,9 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
           ) : (
             <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10">
               {channelId ? (
-                <div className="max-w-md text-center"><h2 className="text-xl font-semibold">Conversation unavailable</h2><p className="mt-2 text-sm text-signal-muted">This conversation does not belong to the current workspace or is no longer accessible.</p></div>
+                <div className="max-w-md rounded-lg border border-signal-line bg-signal-surface/50 px-5 py-6 text-center"><h2 className="text-base font-semibold">Conversation unavailable</h2><p className="mt-2 text-sm text-signal-muted">This conversation does not belong to the current workspace or is no longer accessible.</p></div>
               ) : (
-                <div className="max-w-md text-center"><h2 className="text-xl font-semibold">No channel selected</h2><p className="mt-2 text-sm text-signal-muted">{channels.length ? "Choose a channel to open the conversation." : mayManage ? "Create the first channel for this workspace." : "An Owner or Admin needs to create a channel."}</p>{mayManage && channels.length === 0 && <Button className="mt-5" onClick={openCreate}>Create channel</Button>}</div>
+                <div className="max-w-md rounded-lg border border-dashed border-signal-line bg-signal-surface/45 px-5 py-6 text-center"><h2 className="text-base font-semibold">No channel selected</h2><p className="mt-2 text-sm text-signal-muted">{channels.length ? "Choose a channel to open the conversation." : mayManage ? "Create the first channel for this workspace." : "An Owner or Admin needs to create a channel."}</p>{mayManage && channels.length === 0 && <Button className="mt-5" onClick={openCreate}>Create channel</Button>}</div>
               )}
             </section>
           )}
@@ -453,7 +459,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
             <form className="grid gap-5 px-4" key={`${formMode}-${selectedChannel?.id ?? "new"}`} onSubmit={submitChannel}>
               <label className="grid gap-1.5 text-sm font-medium">Name<input autoFocus className={fieldClass()} defaultValue={formMode === "edit" ? selectedChannel?.name : ""} name="name" pattern="[a-z0-9_-]{2,80}" readOnly={formMode === "edit" && selectedChannel?.name === "general"} required /><span className="text-[11px] font-normal text-signal-muted">Lowercase letters, numbers, hyphens, and underscores only.</span></label>
               <label className="grid gap-1.5 text-sm font-medium">Description <span className="text-signal-muted">(optional)</span><textarea className="min-h-28 rounded-md border border-signal-line bg-signal-surface p-3 text-sm outline-none focus:border-signal-cyan focus:ring-2 focus:ring-signal-cyan/15" defaultValue={formMode === "edit" ? selectedChannel?.description ?? "" : ""} name="description" /></label>
-              {formError && <p className="rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-200" role="alert">{formError}</p>}
+              {formError && <p className="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{formError}</p>}
               <div className="flex justify-end gap-2"><Button onClick={() => setFormOpen(false)} type="button" variant="outline">Cancel</Button><Button disabled={submitting} type="submit">{submitting ? "Saving..." : formMode === "create" ? "Create channel" : "Save changes"}</Button></div>
             </form>
           </SheetContent>
