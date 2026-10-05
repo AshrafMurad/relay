@@ -15,6 +15,7 @@ const directConversationSelect = {
     orderBy: { userId: "asc" },
   },
   messages: { select: { createdAt: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 },
+  readStates: { select: { userId: true, lastReadMessageId: true, lastReadMessage: { select: { createdAt: true, id: true } } } },
 } satisfies Prisma.DirectConversationSelect;
 
 type DirectConversationRecord = Prisma.DirectConversationGetPayload<{ select: typeof directConversationSelect }>;
@@ -23,15 +24,34 @@ export function participantKey(leftUserId: string, rightUserId: string) {
   return [leftUserId, rightUserId].sort().join(":");
 }
 
-function toDirectConversationDTO(conversation: DirectConversationRecord, viewerId: string): DirectConversationDTO {
+async function countUnreadDirectMessages(prisma: PrismaClient, conversation: DirectConversationRecord, viewerId: string) {
+  const readState = conversation.readStates.find((state) => state.userId === viewerId);
+  const unreadWhere = readState?.lastReadMessage === undefined || readState.lastReadMessage === null
+    ? { directConversationId: conversation.id, deletedAt: null, authorId: { not: viewerId } }
+    : {
+      directConversationId: conversation.id,
+      deletedAt: null,
+      authorId: { not: viewerId },
+      OR: [
+        { createdAt: { gt: readState.lastReadMessage.createdAt } },
+        { createdAt: readState.lastReadMessage.createdAt, id: { gt: readState.lastReadMessage.id } },
+      ],
+    };
+  return prisma.message.count({ where: unreadWhere });
+}
+
+async function toDirectConversationDTO(prisma: PrismaClient, conversation: DirectConversationRecord, viewerId: string): Promise<DirectConversationDTO> {
   const other = conversation.members.find((member) => member.userId !== viewerId)?.user;
   if (!other) throw new ApiError(500, "INTERNAL_ERROR", "Direct conversation is missing its other participant.");
+  const readState = conversation.readStates.find((state) => state.userId === viewerId);
   return {
     id: conversation.id,
     workspaceId: conversation.workspaceId,
     participantKey: conversation.participantKey,
     otherUser: other,
     lastMessageAt: conversation.messages[0]?.createdAt.toISOString() ?? null,
+    unreadCount: await countUnreadDirectMessages(prisma, conversation, viewerId),
+    lastReadMessageId: readState?.lastReadMessageId ?? null,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString(),
   };
@@ -56,8 +76,7 @@ export async function listDirectConversations(prisma: PrismaClient, workspaceId:
     where: { workspaceId, members: { some: { userId } } },
     select: directConversationSelect,
   });
-  return conversations
-    .map((conversation) => toDirectConversationDTO(conversation, userId))
+  return (await Promise.all(conversations.map((conversation) => toDirectConversationDTO(prisma, conversation, userId))))
     .sort((left, right) => (right.lastMessageAt ?? right.updatedAt).localeCompare(left.lastMessageAt ?? left.updatedAt));
 }
 
@@ -77,13 +96,13 @@ export async function findOrCreateDirectConversation(prisma: PrismaClient, works
       update: {},
       select: directConversationSelect,
     });
-    return toDirectConversationDTO(conversation, actorId);
+    return toDirectConversationDTO(prisma, conversation, actorId);
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
     const conversation = await prisma.directConversation.findUniqueOrThrow({
       where: { workspaceId_participantKey: { workspaceId, participantKey: key } },
       select: directConversationSelect,
     });
-    return toDirectConversationDTO(conversation, actorId);
+    return toDirectConversationDTO(prisma, conversation, actorId);
   }
 }

@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import type { AuthUserDTO, ChannelDTO, MessageAckEvent, MessageDTO, MessageNewEvent, MessageSendEvent } from "@/lib/api/contracts"
+import type { AuthUserDTO, ChannelDTO, ConversationReadUpdateEvent, MessageAckEvent, MessageDTO, MessageNewEvent, MessageSendEvent, ReactionUpdateEvent } from "@/lib/api/contracts"
 import { apiRequest } from "@/lib/api/client"
 import { createRelaySocket } from "@/lib/realtime/socket"
 
@@ -18,6 +18,8 @@ type SocketHandlerMap = {
   "message:ack": (event: MessageAckEvent) => void
   "message:new": (event: MessageNewEvent) => void
   "message:error": (event: { operationId?: string; code: string; message: string }) => void
+  "reaction:update": (event: ReactionUpdateEvent) => void
+  "conversation:read:update": (event: ConversationReadUpdateEvent) => void
   "typing:update": () => void
 }
 
@@ -54,6 +56,9 @@ function channel(archived: boolean): ChannelDTO {
     description: null,
     createdById: "user-1",
     archivedAt: archived ? "2026-02-01T00:00:00.000Z" : null,
+    lastMessageAt: null,
+    unreadCount: 0,
+    lastReadMessageId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   }
@@ -70,6 +75,7 @@ function message(id: string, content: string, createdAt: string): MessageDTO {
     content,
     parentMessageId: null,
     parent: null,
+    reactions: [],
     editedAt: null,
     deletedAt: null,
     createdAt,

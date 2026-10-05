@@ -7,14 +7,16 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import {
   channelMessageParamsSchema,
+  conversationReadSchema,
   createMessageSchema,
   directMessageParamsSchema,
   editMessageSchema,
   messageHistoryQuerySchema,
   messageParamsSchema,
+  reactionToggleSchema,
   type MessageHistoryQuery,
 } from "./message.contracts.js";
-import { createChannelMessage, createDirectMessage, deleteMessage, editMessage, listChannelMessages, listDirectMessages } from "./message.service.js";
+import { createChannelMessage, createDirectMessage, deleteMessage, editMessage, listChannelMessages, listDirectMessages, markChannelRead, markDirectConversationRead, toggleMessageReaction } from "./message.service.js";
 
 function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -53,6 +55,13 @@ export function createChannelMessageRouter(prisma: PrismaClient) {
     response.status(result.created ? 201 : 200).json({ message: result.message });
   }));
 
+  router.post("/:channelId/read", asyncHandler(async (request, response) => {
+    const { channelId } = parse(channelMessageParamsSchema, request.params);
+    const input = parse(conversationReadSchema, request.body);
+    const readState = await markChannelRead(prisma, channelId, request.authUser!.id, input);
+    response.json({ readState });
+  }));
+
   return router;
 }
 
@@ -71,6 +80,13 @@ export function createMessageRouter(prisma: PrismaClient) {
     const { messageId } = parse(messageParamsSchema, request.params);
     const message = await deleteMessage(prisma, messageId, request.authUser!.id);
     response.json({ message });
+  }));
+
+  router.post("/:messageId/reactions", asyncHandler(async (request, response) => {
+    const { messageId } = parse(messageParamsSchema, request.params);
+    const input = parse(reactionToggleSchema, request.body);
+    const result = await toggleMessageReaction(prisma, messageId, request.authUser!.id, input);
+    response.json({ messageId: result.messageId, reactions: result.reactions });
   }));
 
   return router;
@@ -92,6 +108,13 @@ export function createDirectMessageRouter(prisma: PrismaClient) {
     const input = parse(createMessageSchema, request.body);
     const result = await createDirectMessage(prisma, conversationId, request.authUser!.id, input);
     response.status(result.created ? 201 : 200).json({ message: result.message });
+  }));
+
+  router.post("/:conversationId/read", asyncHandler(async (request, response) => {
+    const { conversationId } = parse(directMessageParamsSchema, request.params);
+    const input = parse(conversationReadSchema, request.body);
+    const readState = await markDirectConversationRead(prisma, conversationId, request.authUser!.id, input);
+    response.json({ readState });
   }));
 
   return router;

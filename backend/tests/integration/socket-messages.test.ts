@@ -175,6 +175,31 @@ describe("real-time channel messaging", () => {
     }
   });
 
+  it("broadcasts reaction and read updates in the authorized conversation room", async () => {
+    const { httpServer, io, url } = await listen();
+    const sender = await connect(url, 0);
+    const receiver = await connect(url, 1);
+    try {
+      await join(sender);
+      await join(receiver);
+      const operationId = randomUUID();
+      sender.emit("message:send", { operationId, workspaceId, conversation: { type: "channel", id: channelId }, content: "interactive" });
+      const ack = await new Promise<MessageAckEvent>((resolve) => sender.once("message:ack", resolve));
+
+      const reaction = new Promise<unknown>((resolve) => receiver.once("reaction:update", resolve));
+      sender.emit("reaction:toggle", { workspaceId, messageId: ack.message.id, emoji: "👍" });
+      await expect(reaction).resolves.toMatchObject({ messageId: ack.message.id, reactions: [{ emoji: "👍", count: 1 }] });
+
+      const read = new Promise<unknown>((resolve) => sender.once("conversation:read:update", resolve));
+      receiver.emit("conversation:read", { workspaceId, conversation: { type: "channel", id: channelId }, messageId: ack.message.id });
+      await expect(read).resolves.toMatchObject({ readState: { userId: userIds[1], conversation: { type: "channel", id: channelId }, lastReadMessageId: ack.message.id } });
+    } finally {
+      sender.close();
+      receiver.close();
+      await close(httpServer, io);
+    }
+  });
+
   it("emits typing updates and delays offline presence until the final socket disconnects", async () => {
     const { httpServer, io, url } = await listen();
     const firstTab = await connect(url, 0);

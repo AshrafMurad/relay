@@ -5,10 +5,14 @@ import { ApiError } from "../../lib/api-error.js";
 import { requireAccessibleDirectConversation } from "../direct-conversations/direct-conversation.service.js";
 import {
   MESSAGE_MAX_CODE_POINTS,
+  type ConversationReadInput,
+  type ConversationReadStateDTO,
   type CreateMessageInput,
   type EditMessageInput,
   type MessageDTO,
   type MessageHistoryDTO,
+  type ReactionSummaryDTO,
+  type ReactionToggleInput,
 } from "./message.contracts.js";
 
 const historyCursorSchema = z.object({
@@ -38,6 +42,7 @@ const messageSelect = {
       author: { select: { name: true } },
     },
   },
+  reactions: { select: { emoji: true, userId: true } },
 } satisfies Prisma.MessageSelect;
 
 type MessageRecord = Prisma.MessageGetPayload<{ select: typeof messageSelect }>;
@@ -54,7 +59,18 @@ interface LockedDirectConversation {
   workspaceId: string;
 }
 
-function toMessageDTO(message: MessageRecord): MessageDTO {
+function summarizeReactions(reactions: Array<{ emoji: string; userId: string }>, viewerId: string): ReactionSummaryDTO[] {
+  const summaries = new Map<string, ReactionSummaryDTO>();
+  for (const reaction of reactions) {
+    const current = summaries.get(reaction.emoji) ?? { emoji: reaction.emoji, count: 0, reactedByMe: false };
+    current.count += 1;
+    current.reactedByMe ||= reaction.userId === viewerId;
+    summaries.set(reaction.emoji, current);
+  }
+  return [...summaries.values()].sort((left, right) => right.count - left.count || left.emoji.localeCompare(right.emoji));
+}
+
+function toMessageDTO(message: MessageRecord, viewerId: string): MessageDTO {
   return {
     id: message.id,
     workspaceId: message.workspaceId,
@@ -70,6 +86,7 @@ function toMessageDTO(message: MessageRecord): MessageDTO {
       content: message.parent.content,
       deletedAt: message.parent.deletedAt?.toISOString() ?? null,
     },
+    reactions: summarizeReactions(message.reactions, viewerId),
     editedAt: message.editedAt?.toISOString() ?? null,
     deletedAt: message.deletedAt?.toISOString() ?? null,
     createdAt: message.createdAt.toISOString(),
@@ -116,6 +133,12 @@ export async function requireAccessibleChannel(prisma: PrismaClient, channelId: 
   });
   if (!channel) throw new ApiError(404, "CHANNEL_NOT_FOUND", "Channel was not found.");
   return channel;
+}
+
+function conversationFromMessage(message: { workspaceId: string; channelId: string | null; directConversationId: string | null }) {
+  if (message.channelId) return { workspaceId: message.workspaceId, type: "channel" as const, id: message.channelId, room: `channel:${message.channelId}` };
+  if (message.directConversationId) return { workspaceId: message.workspaceId, type: "dm" as const, id: message.directConversationId, room: `dm:${message.directConversationId}` };
+  throw new ApiError(500, "INTERNAL_ERROR", "Message has no conversation target.");
 }
 
 async function lockAccessibleChannel(prisma: Transaction, channelId: string, userId: string) {
@@ -203,7 +226,7 @@ export async function listChannelMessages(
   const page = messages.slice(0, options.limit);
   const oldest = page.at(-1);
   return {
-    messages: page.reverse().map(toMessageDTO),
+    messages: page.reverse().map((message) => toMessageDTO(message, userId)),
     nextCursor: hasMore && oldest ? encodeMessageCursor(oldest.createdAt, oldest.id) : null,
     hasMore,
   };
@@ -236,7 +259,7 @@ export async function listDirectMessages(
   const page = messages.slice(0, options.limit);
   const oldest = page.at(-1);
   return {
-    messages: page.reverse().map(toMessageDTO),
+    messages: page.reverse().map((message) => toMessageDTO(message, userId)),
     nextCursor: hasMore && oldest ? encodeMessageCursor(oldest.createdAt, oldest.id) : null,
     hasMore,
   };
@@ -260,7 +283,7 @@ export async function createChannelMessage(
         if (replay.channelId !== channel.id || replay.workspaceId !== channel.workspaceId) {
           throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
         }
-        return { message: toMessageDTO(replay), created: false };
+        return { message: toMessageDTO(replay, authorId), created: false };
       }
       if (channel.archivedAt) throw new ApiError(409, "CHANNEL_ARCHIVED", "Archived channels are read-only.");
       if (input.parentMessageId) {
@@ -282,7 +305,7 @@ export async function createChannelMessage(
         },
         select: messageSelect,
       });
-      return { message: toMessageDTO(message), created: true };
+      return { message: toMessageDTO(message, authorId), created: true };
     });
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
@@ -294,7 +317,7 @@ export async function createChannelMessage(
     if (!existing || existing.channelId !== channel.id || existing.workspaceId !== channel.workspaceId) {
       throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
     }
-    return { message: toMessageDTO(existing), created: false };
+    return { message: toMessageDTO(existing, authorId), created: false };
   }
 }
 
@@ -316,7 +339,7 @@ export async function createDirectMessage(
         if (replay.directConversationId !== conversation.id || replay.workspaceId !== conversation.workspaceId) {
           throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
         }
-        return { message: toMessageDTO(replay), created: false };
+        return { message: toMessageDTO(replay, authorId), created: false };
       }
       if (input.parentMessageId) {
         const parent = await transaction.message.findFirst({
@@ -337,7 +360,7 @@ export async function createDirectMessage(
         },
         select: messageSelect,
       });
-      return { message: toMessageDTO(message), created: true };
+      return { message: toMessageDTO(message, authorId), created: true };
     });
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
@@ -349,7 +372,7 @@ export async function createDirectMessage(
     if (!existing || existing.directConversationId !== conversation.id || existing.workspaceId !== conversation.workspaceId) {
       throw new ApiError(409, "VALIDATION_ERROR", "operationId has already been used for another message.");
     }
-    return { message: toMessageDTO(existing), created: false };
+    return { message: toMessageDTO(existing, authorId), created: false };
   }
 }
 
@@ -365,7 +388,7 @@ export async function editMessage(prisma: PrismaClient, messageId: string, autho
       data: { content, editedAt: new Date() },
       select: messageSelect,
     });
-    return toMessageDTO(message);
+    return toMessageDTO(message, authorId);
   });
 }
 
@@ -373,12 +396,91 @@ export async function deleteMessage(prisma: PrismaClient, messageId: string, aut
   return prisma.$transaction(async (transaction) => {
     const existing = await lockAccessibleMessage(transaction, messageId, authorId);
     if (existing.authorId !== authorId) throw new ApiError(403, "FORBIDDEN", "Only the author can delete this message.");
-    if (existing.deletedAt) return toMessageDTO(existing);
+    if (existing.deletedAt) return toMessageDTO(existing, authorId);
     const message = await transaction.message.update({
       where: { id: existing.id },
       data: { content: "", deletedAt: new Date() },
       select: messageSelect,
     });
-    return toMessageDTO(message);
+    return toMessageDTO(message, authorId);
+  });
+}
+
+export async function toggleMessageReaction(prisma: PrismaClient, messageId: string, userId: string, input: ReactionToggleInput) {
+  return prisma.$transaction(async (transaction) => {
+    const existing = await lockAccessibleMessage(transaction, messageId, userId);
+    const conversation = conversationFromMessage(existing);
+    if (existing.channel?.archivedAt) throw new ApiError(409, "CHANNEL_ARCHIVED", "Archived channels are read-only.");
+    if (existing.deletedAt) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
+    const reaction = await transaction.messageReaction.findUnique({
+      where: { messageId_userId_emoji: { messageId: existing.id, userId, emoji: input.emoji } },
+      select: { id: true },
+    });
+    if (reaction) {
+      await transaction.messageReaction.delete({ where: { id: reaction.id } });
+    } else {
+      await transaction.messageReaction.create({ data: { messageId: existing.id, userId, emoji: input.emoji } });
+    }
+    const reactions = await transaction.messageReaction.findMany({ where: { messageId: existing.id }, select: { emoji: true, userId: true } });
+    return { messageId: existing.id, conversation, reactions: summarizeReactions(reactions, userId) };
+  });
+}
+
+function toReadStateDTO(input: { workspaceId: string; type: "channel" | "dm"; id: string; userId: string; lastReadMessageId: string; lastReadAt: Date }): ConversationReadStateDTO {
+  return {
+    workspaceId: input.workspaceId,
+    conversation: { type: input.type, id: input.id },
+    userId: input.userId,
+    lastReadMessageId: input.lastReadMessageId,
+    lastReadAt: input.lastReadAt.toISOString(),
+  };
+}
+
+async function shouldAdvanceReadState(transaction: Transaction, currentMessageId: string | null, next: { createdAt: Date; id: string }) {
+  if (!currentMessageId) return true;
+  const current = await transaction.message.findUnique({ where: { id: currentMessageId }, select: { createdAt: true, id: true } });
+  if (!current) return true;
+  return current.createdAt < next.createdAt || (current.createdAt.getTime() === next.createdAt.getTime() && current.id < next.id);
+}
+
+export async function markChannelRead(prisma: PrismaClient, channelId: string, userId: string, input: ConversationReadInput) {
+  return prisma.$transaction(async (transaction) => {
+    const channel = await lockAccessibleChannel(transaction, channelId, userId);
+    const message = await transaction.message.findFirst({
+      where: { id: input.messageId, channelId: channel.id, workspaceId: channel.workspaceId },
+      select: { id: true, createdAt: true },
+    });
+    if (!message) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
+    const current = await transaction.channelReadState.findUnique({ where: { channelId_userId: { channelId: channel.id, userId } } });
+    if (current && !(await shouldAdvanceReadState(transaction, current.lastReadMessageId, message))) {
+      return toReadStateDTO({ workspaceId: channel.workspaceId, type: "channel", id: channel.id, userId, lastReadMessageId: current.lastReadMessageId!, lastReadAt: current.lastReadAt });
+    }
+    const readState = await transaction.channelReadState.upsert({
+      where: { channelId_userId: { channelId: channel.id, userId } },
+      create: { channelId: channel.id, userId, lastReadMessageId: message.id },
+      update: { lastReadMessageId: message.id, lastReadAt: new Date() },
+    });
+    return toReadStateDTO({ workspaceId: channel.workspaceId, type: "channel", id: channel.id, userId, lastReadMessageId: readState.lastReadMessageId!, lastReadAt: readState.lastReadAt });
+  });
+}
+
+export async function markDirectConversationRead(prisma: PrismaClient, conversationId: string, userId: string, input: ConversationReadInput) {
+  return prisma.$transaction(async (transaction) => {
+    const conversation = await lockAccessibleDirectConversation(transaction, conversationId, userId);
+    const message = await transaction.message.findFirst({
+      where: { id: input.messageId, directConversationId: conversation.id, workspaceId: conversation.workspaceId },
+      select: { id: true, createdAt: true },
+    });
+    if (!message) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
+    const current = await transaction.directConversationReadState.findUnique({ where: { directConversationId_userId: { directConversationId: conversation.id, userId } } });
+    if (current && !(await shouldAdvanceReadState(transaction, current.lastReadMessageId, message))) {
+      return toReadStateDTO({ workspaceId: conversation.workspaceId, type: "dm", id: conversation.id, userId, lastReadMessageId: current.lastReadMessageId!, lastReadAt: current.lastReadAt });
+    }
+    const readState = await transaction.directConversationReadState.upsert({
+      where: { directConversationId_userId: { directConversationId: conversation.id, userId } },
+      create: { directConversationId: conversation.id, userId, lastReadMessageId: message.id },
+      update: { lastReadMessageId: message.id, lastReadAt: new Date() },
+    });
+    return toReadStateDTO({ workspaceId: conversation.workspaceId, type: "dm", id: conversation.id, userId, lastReadMessageId: readState.lastReadMessageId!, lastReadAt: readState.lastReadAt });
   });
 }

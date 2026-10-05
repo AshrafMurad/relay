@@ -30,6 +30,9 @@ export interface ChannelDTO {
   description: string | null;
   createdById: string;
   archivedAt: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  lastReadMessageId: string | null;
   createdAt: string;
   updatedAt: string;
 }

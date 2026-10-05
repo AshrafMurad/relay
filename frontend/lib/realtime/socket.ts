@@ -1,12 +1,14 @@
 import { io, type Socket } from "socket.io-client"
 
 import { parsePublicEnvironment } from "@/env"
-import type { ConversationJoinEvent, MessageAckEvent, MessageErrorEvent, MessageNewEvent, MessageSendEvent, PresenceUpdateEvent, TypingEvent, TypingUpdateEvent } from "@/lib/api/contracts"
+import type { ConversationJoinEvent, ConversationReadEvent, ConversationReadUpdateEvent, MessageAckEvent, MessageErrorEvent, MessageNewEvent, MessageSendEvent, PresenceUpdateEvent, ReactionToggleEvent, ReactionUpdateEvent, TypingEvent, TypingUpdateEvent } from "@/lib/api/contracts"
 
 interface ServerToClientEvents {
   "message:ack": (event: MessageAckEvent) => void
   "message:new": (event: MessageNewEvent) => void
   "message:error": (event: MessageErrorEvent) => void
+  "reaction:update": (event: ReactionUpdateEvent) => void
+  "conversation:read:update": (event: ConversationReadUpdateEvent) => void
   "presence:update": (event: PresenceUpdateEvent) => void
   "typing:update": (event: TypingUpdateEvent) => void
 }
@@ -15,6 +17,8 @@ interface ClientToServerEvents {
   "conversation:join": (event: ConversationJoinEvent, acknowledge?: (event: { ok: true } | MessageErrorEvent) => void) => void
   "conversation:leave": (event: ConversationJoinEvent) => void
   "message:send": (event: MessageSendEvent) => void
+  "reaction:toggle": (event: ReactionToggleEvent) => void
+  "conversation:read": (event: ConversationReadEvent) => void
   "typing:start": (event: TypingEvent) => void
   "typing:stop": (event: TypingEvent) => void
 }

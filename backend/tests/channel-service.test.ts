@@ -49,6 +49,13 @@ function prismaMock(options: {
       create: vi.fn().mockResolvedValue(created),
       update: vi.fn().mockImplementation(({ data }: { data: Partial<Channel> }) => Promise.resolve({ ...created, ...data })),
     },
+    message: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      count: vi.fn().mockResolvedValue(0),
+    },
+    channelReadState: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
   } as unknown as PrismaClient;
 }
 

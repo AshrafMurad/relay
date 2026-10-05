@@ -14,7 +14,7 @@ function assertCanManageChannels(role: WorkspaceRole) {
   }
 }
 
-function toChannelDTO(channel: Channel): ChannelDTO {
+function toChannelDTO(channel: Channel, activity?: { lastMessageAt: Date | null; unreadCount: number; lastReadMessageId: string | null }): ChannelDTO {
   return {
     id: channel.id,
     workspaceId: channel.workspaceId,
@@ -22,6 +22,9 @@ function toChannelDTO(channel: Channel): ChannelDTO {
     description: channel.description,
     createdById: channel.createdById,
     archivedAt: channel.archivedAt?.toISOString() ?? null,
+    lastMessageAt: activity?.lastMessageAt?.toISOString() ?? null,
+    unreadCount: activity?.unreadCount ?? 0,
+    lastReadMessageId: activity?.lastReadMessageId ?? null,
     createdAt: channel.createdAt.toISOString(),
     updatedAt: channel.updatedAt.toISOString(),
   };
@@ -54,9 +57,33 @@ export async function listChannels(prisma: PrismaClient, workspaceId: string, us
   await requireWorkspaceMember(prisma, workspaceId, userId);
   const channels = await prisma.channel.findMany({
     where: { workspaceId },
-    orderBy: [{ archivedAt: "asc" }, { name: "asc" }],
   });
-  return channels.map(toChannelDTO);
+  const dtos = await Promise.all(channels.map(async (channel) => {
+    const [latest, readState] = await Promise.all([
+      prisma.message.findFirst({ where: { channelId: channel.id, deletedAt: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
+      prisma.channelReadState.findUnique({ where: { channelId_userId: { channelId: channel.id, userId } }, select: { lastReadMessageId: true, lastReadMessage: { select: { createdAt: true, id: true } } } }),
+    ]);
+    const unreadWhere = readState?.lastReadMessage === undefined || readState.lastReadMessage === null
+      ? { channelId: channel.id, deletedAt: null, authorId: { not: userId } }
+      : {
+        channelId: channel.id,
+        deletedAt: null,
+        authorId: { not: userId },
+        OR: [
+          { createdAt: { gt: readState.lastReadMessage.createdAt } },
+          { createdAt: readState.lastReadMessage.createdAt, id: { gt: readState.lastReadMessage.id } },
+        ],
+      };
+    const unreadCount = await prisma.message.count({ where: unreadWhere });
+    return toChannelDTO(channel, { lastMessageAt: latest?.createdAt ?? null, unreadCount, lastReadMessageId: readState?.lastReadMessageId ?? null });
+  }));
+  return dtos.sort((left, right) => {
+    if (left.archivedAt && !right.archivedAt) return 1;
+    if (!left.archivedAt && right.archivedAt) return -1;
+    const leftActivity = left.lastMessageAt ?? left.updatedAt;
+    const rightActivity = right.lastMessageAt ?? right.updatedAt;
+    return rightActivity.localeCompare(leftActivity) || left.name.localeCompare(right.name);
+  });
 }
 
 export async function createChannel(

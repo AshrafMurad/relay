@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
-import type { AuthUserDTO, ChannelDTO, DirectConversationDTO, WorkspaceDTO, WorkspaceMemberDTO } from "@/lib/api/contracts"
+import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, WorkspaceDTO, WorkspaceMemberDTO } from "@/lib/api/contracts"
 import { canManageChannels, channelNameSchema } from "@/lib/channels"
 import { cn } from "@/lib/utils"
 
@@ -160,6 +160,31 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Direct message could not be opened.")
     }
+  }
+
+  function updateConversationActivity(conversation: { type: "channel" | "dm"; id: string }, message: MessageDTO) {
+    if (conversation.type === "channel") {
+      setChannels((current) => current
+        .map((channel) => channel.id === conversation.id ? { ...channel, lastMessageAt: message.createdAt, unreadCount: channel.id === channelId || message.author.id === user?.id ? channel.unreadCount : channel.unreadCount + 1 } : channel)
+        .sort((left, right) => {
+          if (left.archivedAt && !right.archivedAt) return 1
+          if (!left.archivedAt && right.archivedAt) return -1
+          return (right.lastMessageAt ?? right.updatedAt).localeCompare(left.lastMessageAt ?? left.updatedAt) || left.name.localeCompare(right.name)
+        }))
+      return
+    }
+    setDirectConversations((current) => current
+      .map((item) => item.id === conversation.id ? { ...item, lastMessageAt: message.createdAt, unreadCount: item.id === conversationId || message.author.id === user?.id ? item.unreadCount : item.unreadCount + 1 } : item)
+      .sort((left, right) => (right.lastMessageAt ?? right.updatedAt).localeCompare(left.lastMessageAt ?? left.updatedAt)))
+  }
+
+  function updateReadState(readState: ConversationReadStateDTO) {
+    if (readState.userId !== user?.id) return
+    if (readState.conversation.type === "channel") {
+      setChannels((current) => current.map((channel) => channel.id === readState.conversation.id ? { ...channel, lastReadMessageId: readState.lastReadMessageId, unreadCount: 0 } : channel))
+      return
+    }
+    setDirectConversations((current) => current.map((item) => item.id === readState.conversation.id ? { ...item, lastReadMessageId: readState.lastReadMessageId, unreadCount: 0 } : item))
   }
 
   function openCreate() {
@@ -288,6 +313,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
                   {active && <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-signal-amber" />}
                   <Hash className="size-3.5" />
                   <span className="truncate">{channel.name}</span>
+                  {channel.unreadCount > 0 && <span className="ml-auto rounded-full bg-signal-amber px-1.5 py-0.5 text-[9px] font-bold text-signal-carbon">{channel.unreadCount}</span>}
                   {channel.archivedAt && <span className="ml-auto text-[9px] uppercase">Archived</span>}
                 </Link>
               )
@@ -318,6 +344,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
                   {active && <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-signal-amber" />}
                   <UserRound className="size-3.5" />
                   <span className="truncate">{conversation.otherUser.name}</span>
+                  {conversation.unreadCount > 0 && <span className="ml-auto rounded-full bg-signal-amber px-1.5 py-0.5 text-[9px] font-bold text-signal-carbon">{conversation.unreadCount}</span>}
                 </Link>
               )
             })}
@@ -398,9 +425,9 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
           {error && state === "ready" && <p className="border-b border-red-400/20 bg-red-500/10 px-5 py-2 text-xs text-red-200" role="alert">{error}</p>}
 
           {selectedDirectConversation ? (
-            <ChannelMessages key={selectedDirectConversation.id} target={{ type: "dm", conversation: selectedDirectConversation }} user={user} />
+            <ChannelMessages key={selectedDirectConversation.id} onActivity={updateConversationActivity} onReadState={updateReadState} target={{ type: "dm", conversation: selectedDirectConversation }} user={user} />
           ) : selectedChannel ? (
-            <ChannelMessages key={selectedChannel.id} target={{ type: "channel", channel: selectedChannel }} user={user} />
+            <ChannelMessages key={selectedChannel.id} onActivity={updateConversationActivity} onReadState={updateReadState} target={{ type: "channel", channel: selectedChannel }} user={user} />
           ) : (
             <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10">
               {channelId ? (

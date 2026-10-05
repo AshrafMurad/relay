@@ -61,6 +61,9 @@ export interface ChannelDTO {
   description: string | null;
   createdById: string;
   archivedAt: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  lastReadMessageId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +79,8 @@ export interface DirectConversationDTO {
     image: string | null;
   };
   lastMessageAt: string | null;
+  unreadCount: number;
+  lastReadMessageId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,10 +104,17 @@ export interface MessageDTO {
     content: string;
     deletedAt: string | null;
   } | null;
+  reactions: ReactionSummaryDTO[];
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReactionSummaryDTO {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
 }
 
 export interface MessageHistoryResponse {
@@ -144,6 +156,37 @@ export interface MessageErrorEvent {
   operationId?: string;
   code: string;
   message: string;
+}
+
+export interface ReactionToggleEvent {
+  workspaceId: string;
+  messageId: string;
+  emoji: string;
+}
+
+export interface ReactionUpdateEvent {
+  sequence: string;
+  workspaceId: string;
+  conversation: ConversationRef;
+  messageId: string;
+  reactions: ReactionSummaryDTO[];
+}
+
+export interface ConversationReadEvent extends ConversationJoinEvent {
+  messageId: string;
+}
+
+export interface ConversationReadStateDTO {
+  workspaceId: string;
+  conversation: ConversationRef;
+  userId: string;
+  lastReadMessageId: string;
+  lastReadAt: string;
+}
+
+export interface ConversationReadUpdateEvent {
+  sequence: string;
+  readState: ConversationReadStateDTO;
 }
 
 export interface PresenceUpdateEvent {

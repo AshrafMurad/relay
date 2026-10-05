@@ -232,6 +232,37 @@ describe("durable channel message HTTP API", () => {
     await request(app).post(`/api/workspaces/${workspaceId}/direct-conversations`).set("Cookie", cookie(0)).send({ userId: userIds[2] }).expect(404);
   });
 
+  it("toggles reactions once per user and hides messages from outsiders", async () => {
+    const created = await request(app).post(`/api/channels/${channelId}/messages`).set("Cookie", cookie(0)).send({ operationId: randomUUID(), content: "reactable" }).expect(201);
+    const messageId = created.body.message.id as string;
+
+    const added = await request(app).post(`/api/messages/${messageId}/reactions`).set("Cookie", cookie(1)).send({ emoji: "👍" }).expect(200);
+    expect(added.body).toMatchObject({ messageId, reactions: [{ emoji: "👍", count: 1, reactedByMe: true }] });
+    const listed = await request(app).get(`/api/channels/${channelId}/messages`).set("Cookie", cookie(0)).expect(200);
+    expect(listed.body.messages.find((message: { id: string }) => message.id === messageId).reactions).toMatchObject([{ emoji: "👍", count: 1, reactedByMe: false }]);
+
+    const removed = await request(app).post(`/api/messages/${messageId}/reactions`).set("Cookie", cookie(1)).send({ emoji: "👍" }).expect(200);
+    expect(removed.body.reactions).toEqual([]);
+    await request(app).post(`/api/messages/${messageId}/reactions`).set("Cookie", cookie(2)).send({ emoji: "👍" }).expect(404);
+  });
+
+  it("persists monotonic channel read state and unread counts", async () => {
+    const readChannel = await createChannel(database.prisma, workspaceId, userIds[0]!, { name: `read-${randomUUID().slice(0, 8)}` });
+    const first = await request(app).post(`/api/channels/${readChannel.id}/messages`).set("Cookie", cookie(0)).send({ operationId: randomUUID(), content: "first unread" }).expect(201);
+    const second = await request(app).post(`/api/channels/${readChannel.id}/messages`).set("Cookie", cookie(0)).send({ operationId: randomUUID(), content: "second unread" }).expect(201);
+
+    const withUnread = await request(app).get(`/api/workspaces/${workspaceId}/channels`).set("Cookie", cookie(1)).expect(200);
+    expect(withUnread.body.channels.find((channel: { id: string }) => channel.id === readChannel.id)).toMatchObject({ unreadCount: 2, lastReadMessageId: null, lastMessageAt: second.body.message.createdAt });
+
+    const read = await request(app).post(`/api/channels/${readChannel.id}/read`).set("Cookie", cookie(1)).send({ messageId: second.body.message.id }).expect(200);
+    expect(read.body.readState).toMatchObject({ userId: userIds[1], conversation: { type: "channel", id: readChannel.id }, lastReadMessageId: second.body.message.id });
+    await request(app).post(`/api/channels/${readChannel.id}/read`).set("Cookie", cookie(1)).send({ messageId: first.body.message.id }).expect(200);
+
+    const afterRead = await request(app).get(`/api/workspaces/${workspaceId}/channels`).set("Cookie", cookie(1)).expect(200);
+    expect(afterRead.body.channels.find((channel: { id: string }) => channel.id === readChannel.id)).toMatchObject({ unreadCount: 0, lastReadMessageId: second.body.message.id });
+    await request(app).post(`/api/channels/${readChannel.id}/read`).set("Cookie", cookie(2)).send({ messageId: second.body.message.id }).expect(404);
+  });
+
   it("revokes access after active membership removal", async () => {
     await database.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId: userIds[1]! } },

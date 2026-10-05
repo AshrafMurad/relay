@@ -13,8 +13,8 @@ import type { Logger } from "../lib/logger.js";
 import { ApiError } from "../lib/api-error.js";
 import { getSessionByToken, SESSION_COOKIE_NAME } from "../modules/auth/auth.service.js";
 import { requireAccessibleDirectConversation } from "../modules/direct-conversations/direct-conversation.service.js";
-import { createMessageSchema } from "../modules/messages/message.contracts.js";
-import { createChannelMessage, createDirectMessage, requireAccessibleChannel } from "../modules/messages/message.service.js";
+import { conversationReadSchema, createMessageSchema, reactionToggleSchema } from "../modules/messages/message.contracts.js";
+import { createChannelMessage, createDirectMessage, markChannelRead, markDirectConversationRead, requireAccessibleChannel, toggleMessageReaction } from "../modules/messages/message.service.js";
 
 function readCookie(header: string | undefined, name: string) {
   if (!header) return undefined;
@@ -74,6 +74,7 @@ export function createSocketServer(
   const allowShortMessageSend = createWindowLimiter(30, 10_000);
   const allowLongMessageSend = createWindowLimiter(300, 5 * 60_000);
   const allowTyping = createWindowLimiter(20, 10_000);
+  const allowReaction = createWindowLimiter(60, 60_000);
   const activeSocketsByUser = new Map<string, Set<string>>();
   const presenceGraceTimers = new Map<string, NodeJS.Timeout>();
   const typingTimers = new Map<string, NodeJS.Timeout>();
@@ -220,6 +221,50 @@ export function createSocketServer(
       } catch (error) {
         logger.warn({ socketId: socket.id, userId: socket.data.userId, error }, "Rejected message:send event");
         socket.emit("message:error", socketError(error, event?.operationId));
+      }
+    });
+
+    socket.on("reaction:toggle", async (event) => {
+      if (!prisma || !socket.data.userId) {
+        socket.emit("message:error", { code: "UNAUTHORIZED", message: "Socket authentication is required." });
+        return;
+      }
+      try {
+        if (!allowReaction(socket.data.userId)) throw new ApiError(429, "RATE_LIMITED", "Too many reaction changes.");
+        const parsed = reactionToggleSchema.safeParse({ emoji: event.emoji });
+        if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Socket event data is invalid.");
+        const result = await toggleMessageReaction(prisma, event.messageId, socket.data.userId, parsed.data);
+        if (result.conversation.workspaceId !== event.workspaceId) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
+        io.to(result.conversation.room).emit("reaction:update", {
+          sequence: `${new Date().toISOString()}:${result.messageId}:reaction`,
+          workspaceId: result.conversation.workspaceId,
+          conversation: { type: result.conversation.type, id: result.conversation.id },
+          messageId: result.messageId,
+          reactions: result.reactions,
+        });
+      } catch (error) {
+        socket.emit("message:error", socketError(error));
+      }
+    });
+
+    socket.on("conversation:read", async (event) => {
+      if (!prisma || !socket.data.userId) {
+        socket.emit("message:error", { code: "UNAUTHORIZED", message: "Socket authentication is required." });
+        return;
+      }
+      try {
+        const conversation = await authorizeConversation(event);
+        const parsed = conversationReadSchema.safeParse({ messageId: event.messageId });
+        if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Socket event data is invalid.");
+        const readState = conversation.type === "channel"
+          ? await markChannelRead(prisma, conversation.id, socket.data.userId, parsed.data)
+          : await markDirectConversationRead(prisma, conversation.id, socket.data.userId, parsed.data);
+        io.to(conversation.room).emit("conversation:read:update", {
+          sequence: `${readState.lastReadAt}:${readState.userId}:read`,
+          readState,
+        });
+      } catch (error) {
+        socket.emit("message:error", socketError(error));
       }
     });
 

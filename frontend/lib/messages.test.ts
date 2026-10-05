@@ -14,6 +14,7 @@ function message(id: string, operationId: string, createdAt = "2026-01-01T00:00:
     content: id,
     parentMessageId: null,
     parent: null,
+    reactions: [],
     editedAt: null,
     deletedAt: null,
     createdAt,

@@ -37,6 +37,9 @@ model User {
   createdChannels      Channel[]              @relation("ChannelCreator")
   messages             Message[]              @relation("MessageAuthor")
   directConversations  DirectConversationMember[]
+  reactions            MessageReaction[]
+  channelReadStates    ChannelReadState[]
+  directReadStates     DirectConversationReadState[]
 }
 
 model Account {
@@ -152,6 +155,7 @@ model Channel {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy User      @relation("ChannelCreator", fields: [createdById], references: [id])
   messages  Message[]
+  readStates ChannelReadState[]
 
   @@index([workspaceId, archivedAt, name])
   @@index([createdById])
@@ -168,6 +172,7 @@ model DirectConversation {
   workspace Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members   DirectConversationMember[]
   messages  Message[]
+  readStates DirectConversationReadState[]
 
   @@unique([workspaceId, participantKey])
   @@index([workspaceId, updatedAt])
@@ -206,6 +211,9 @@ model Message {
   author    User      @relation("MessageAuthor", fields: [authorId], references: [id])
   parent    Message?  @relation("MessageReplies", fields: [parentMessageId], references: [id])
   replies   Message[] @relation("MessageReplies")
+  reactions MessageReaction[]
+  channelReadMarkers ChannelReadState[] @relation("ChannelLastReadMessage")
+  directReadMarkers DirectConversationReadState[] @relation("DirectLastReadMessage")
 
   @@unique([authorId, operationId])
   @@index([channelId, createdAt, id])
@@ -213,4 +221,51 @@ model Message {
   @@index([workspaceId])
   @@index([parentMessageId])
   @@index([authorId])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model ChannelReadState {
+  id                String   @id @default(uuid()) @db.Uuid
+  channelId         String   @db.Uuid
+  userId            String   @db.Uuid
+  lastReadMessageId String?  @db.Uuid
+  lastReadAt        DateTime @default(now()) @db.Timestamptz(6)
+
+  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage Message? @relation("ChannelLastReadMessage", fields: [lastReadMessageId], references: [id])
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@index([lastReadMessageId])
+}
+
+model DirectConversationReadState {
+  id                   String   @id @default(uuid()) @db.Uuid
+  directConversationId String   @db.Uuid
+  userId               String   @db.Uuid
+  lastReadMessageId    String?  @db.Uuid
+  lastReadAt           DateTime @default(now()) @db.Timestamptz(6)
+
+  directConversation DirectConversation @relation(fields: [directConversationId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage    Message?           @relation("DirectLastReadMessage", fields: [lastReadMessageId], references: [id])
+
+  @@unique([directConversationId, userId])
+  @@index([userId])
+  @@index([lastReadMessageId])
 }

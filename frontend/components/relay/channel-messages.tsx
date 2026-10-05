@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import { AlertCircle, CornerUpLeft, MoreHorizontal, Pencil, RotateCcw, Send, Trash2, X } from "lucide-react"
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
+import { AlertCircle, CornerUpLeft, MoreHorizontal, Pencil, RotateCcw, Send, SmilePlus, Trash2, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Textarea } from "@/components/ui/textarea"
 import { apiRequest } from "@/lib/api/client"
-import type { AuthUserDTO, ChannelDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, TypingUpdateEvent } from "@/lib/api/contracts"
+import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, ReactionSummaryDTO, TypingUpdateEvent } from "@/lib/api/contracts"
 import {
   MESSAGE_CODE_POINT_LIMIT,
   createOptimisticMessage,
@@ -33,6 +33,7 @@ type SocketState = "connecting" | "connected" | "disconnected"
 const ACK_TIMEOUT_MS = 10_000
 const TYPING_INACTIVITY_MS = 3_000
 const TYPING_REFRESH_MS = 3_000
+const QUICK_REACTIONS = ["👍", "✅", "👀", "❤️"]
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
 
@@ -64,6 +65,7 @@ function MessageRow({
   onDelete,
   onEdit,
   onReply,
+  onReact,
   onRetry,
 }: {
   archived: boolean
@@ -71,6 +73,7 @@ function MessageRow({
   message: ClientMessage
   onDelete: (message: ClientMessage) => Promise<void>
   onEdit: (message: ClientMessage, content: string) => Promise<void>
+  onReact: (message: ClientMessage, emoji: string) => void
   onReply: (message: ClientMessage) => void
   onRetry: (message: ClientMessage) => void
 }) {
@@ -80,6 +83,7 @@ function MessageRow({
   const [saving, setSaving] = useState(false)
   const ownMessage = message.author.id === currentUserId
   const canAct = !archived && !message.deletedAt && !message.temporary
+  const canReact = canAct && !editing
 
   async function submitEdit(event: FormEvent) {
     event.preventDefault()
@@ -135,6 +139,22 @@ function MessageRow({
             <Button className="h-6 px-2 text-[10px]" onClick={() => onRetry(message)} type="button" variant="outline"><RotateCcw /> Retry</Button>
           </div>
         )}
+        {message.reactions.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Message reactions">
+            {message.reactions.map((reaction) => (
+              <button
+                aria-pressed={reaction.reactedByMe}
+                className={cn("rounded-full border px-2 py-0.5 text-[11px] transition", reaction.reactedByMe ? "border-signal-amber bg-signal-amber/15 text-signal-amber" : "border-signal-line bg-signal-surface text-signal-muted hover:text-signal-ink")}
+                disabled={!canReact}
+                key={reaction.emoji}
+                onClick={() => onReact(message, reaction.emoji)}
+                type="button"
+              >
+                {reaction.emoji} {reaction.count}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {canAct && (
         <DropdownMenu>
@@ -143,11 +163,17 @@ function MessageRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-36">
             <DropdownMenuItem onClick={() => onReply(message)}><CornerUpLeft /> Reply</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onReact(message, "👍")}><SmilePlus /> React 👍</DropdownMenuItem>
             {ownMessage && <DropdownMenuSeparator />}
             {ownMessage && <DropdownMenuItem onClick={() => setEditing(true)}><Pencil /> Edit</DropdownMenuItem>}
             {ownMessage && <DropdownMenuItem onClick={() => void onDelete(message)} variant="destructive"><Trash2 /> Delete</DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+      {canReact && (
+        <div className="absolute right-12 top-2 hidden gap-1 rounded-full border border-signal-line bg-signal-paper p-1 shadow-sm group-hover:flex group-focus-within:flex">
+          {QUICK_REACTIONS.map((emoji) => <button className="grid size-6 place-items-center rounded-full text-xs hover:bg-signal-surface" key={emoji} onClick={() => onReact(message, emoji)} type="button">{emoji}</button>)}
+        </div>
       )}
     </article>
   )
@@ -157,7 +183,7 @@ type ConversationTarget =
   | { type: "channel"; channel: ChannelDTO }
   | { type: "dm"; conversation: DirectConversationDTO }
 
-export function ChannelMessages({ target, user }: { target: ConversationTarget; user: AuthUserDTO }) {
+export function ChannelMessages({ onActivity, onReadState, target, user }: { onActivity?: (conversation: { type: "channel" | "dm"; id: string }, message: MessageDTO) => void; onReadState?: (readState: ConversationReadStateDTO) => void; target: ConversationTarget; user: AuthUserDTO }) {
   const [historyState, setHistoryState] = useState<HistoryState>("loading")
   const [messages, setMessages] = useState<ClientMessage[]>([])
   const [historyError, setHistoryError] = useState("")
@@ -169,6 +195,7 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null)
   const [socketState, setSocketState] = useState<SocketState>("connecting")
   const [typingUsers, setTypingUsers] = useState<TypingUpdateEvent["user"][]>([])
+  const [lastReadMessageId, setLastReadMessageId] = useState(target.type === "channel" ? target.channel.lastReadMessageId : target.conversation.lastReadMessageId)
   const scrollRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<RelaySocket | null>(null)
   const pendingTimeouts = useRef(new Map<string, number>())
@@ -180,10 +207,12 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
   const archived = target.type === "channel" && Boolean(target.channel.archivedAt)
   const conversationId = target.type === "channel" ? target.channel.id : target.conversation.id
   const workspaceId = target.type === "channel" ? target.channel.workspaceId : target.conversation.workspaceId
-  const conversationRef = { type: target.type, id: conversationId } as const
   const title = target.type === "channel" ? `#${target.channel.name}` : target.conversation.otherUser.name
   const historyPath = target.type === "channel" ? `/channels/${conversationId}/messages` : `/direct-conversations/${conversationId}/messages`
+  const readPath = target.type === "channel" ? `/channels/${conversationId}/read` : `/direct-conversations/${conversationId}/read`
   const draftCodePoints = Array.from(draft.trim()).length
+  const reportActivity = useEffectEvent((message: MessageDTO) => onActivity?.({ type: target.type, id: conversationId }, message))
+  const reportReadState = useEffectEvent((readState: ConversationReadStateDTO) => onReadState?.(readState))
 
   async function loadInitial() {
     const request = ++initialRequest.current
@@ -237,11 +266,22 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
       pending.delete(event.operationId)
       shouldScrollToBottom.current = true
       setMessages((current) => replaceMessage(current, event.message))
+      reportActivity(event.message)
     })
     socket.on("message:new", (event) => {
       if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
       shouldScrollToBottom.current = true
       setMessages((current) => mergeMessages(current, [event.message]))
+      reportActivity(event.message)
+    })
+    socket.on("reaction:update", (event) => {
+      if (event.conversation.type !== target.type || event.conversation.id !== conversationId) return
+      setMessages((current) => current.map((message) => message.id === event.messageId ? { ...message, reactions: event.reactions } : message))
+    })
+    socket.on("conversation:read:update", (event) => {
+      if (event.readState.conversation.type !== target.type || event.readState.conversation.id !== conversationId) return
+      if (event.readState.userId === user.id) setLastReadMessageId(event.readState.lastReadMessageId)
+      reportReadState(event.readState)
     })
     socket.on("typing:update", (event) => {
       if (event.conversation.type !== target.type || event.conversation.id !== conversationId || event.user.id === user.id) return
@@ -274,6 +314,23 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
       socketRef.current = null
     }
   }, [archived, conversationId, workspaceId, target.type, user.id])
+
+  useEffect(() => {
+    if (historyState !== "ready" || messages.length === 0) return
+    const latest = messages.filter((message) => !message.temporary).at(-1)
+    if (!latest || latest.id === lastReadMessageId) return
+    if (socketRef.current?.connected && !archived) {
+      socketRef.current.emit("conversation:read", { workspaceId, conversation: { type: target.type, id: conversationId }, messageId: latest.id })
+      return
+    }
+    void apiRequest<{ readState: ConversationReadStateDTO }>(readPath, {
+      method: "POST",
+      body: JSON.stringify({ messageId: latest.id }),
+    }).then(({ readState }) => {
+      setLastReadMessageId(readState.lastReadMessageId)
+      reportReadState(readState)
+    }).catch(() => undefined)
+  }, [archived, conversationId, historyState, lastReadMessageId, messages, readPath, target.type, workspaceId])
 
   useLayoutEffect(() => {
     const viewport = scrollRef.current
@@ -330,7 +387,7 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
     socket.emit("message:send", {
       operationId: clientMessage.operationId,
       workspaceId,
-      conversation: conversationRef,
+      conversation: { type: target.type, id: conversationId },
       content: clientMessage.content,
       ...(clientMessage.parentMessageId ? { parentMessageId: clientMessage.parentMessageId } : {}),
     })
@@ -359,7 +416,7 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
     setDraft("")
     setReplyingTo(null)
     setComposerError("")
-    socketRef.current?.emit("typing:stop", { workspaceId, conversation: conversationRef })
+    socketRef.current?.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })
     shouldScrollToBottom.current = true
     sendMessage(optimistic)
   }
@@ -377,12 +434,12 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
     if (!socket?.connected) return
     const now = Date.now()
     if (now - lastTypingStart.current >= TYPING_REFRESH_MS) {
-      socket.emit("typing:start", { workspaceId, conversation: conversationRef })
+      socket.emit("typing:start", { workspaceId, conversation: { type: target.type, id: conversationId } })
       lastTypingStart.current = now
     }
     if (typingStopTimeout.current) window.clearTimeout(typingStopTimeout.current)
     typingStopTimeout.current = window.setTimeout(() => {
-      socket.emit("typing:stop", { workspaceId, conversation: conversationRef })
+      socket.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })
       typingStopTimeout.current = null
     }, TYPING_INACTIVITY_MS)
   }
@@ -409,6 +466,30 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
     }
   }
 
+  async function reactToMessage(message: ClientMessage, emoji: string) {
+    if (archived || message.temporary || message.deletedAt) return
+    const socket = socketRef.current
+    if (socket?.connected) {
+      socket.emit("reaction:toggle", { workspaceId, messageId: message.id, emoji })
+      return
+    }
+    try {
+      const response = await apiRequest<{ messageId: string; reactions: ReactionSummaryDTO[] }>(`/messages/${message.id}/reactions`, {
+        method: "POST",
+        body: JSON.stringify({ emoji }),
+      })
+      setMessages((current) => current.map((item) => item.id === response.messageId ? { ...item, reactions: response.reactions } : item))
+    } catch (caught) {
+      setHistoryError(messageError(caught, "Reaction could not be saved."))
+    }
+  }
+
+  function isFirstUnread(message: ClientMessage, index: number) {
+    if (!lastReadMessageId) return index === 0 && message.author.id !== user.id
+    const readIndex = messages.findIndex((item) => item.id === lastReadMessageId)
+    return readIndex >= 0 && index === readIndex + 1
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Messages in ${title}`}>
       <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
@@ -428,8 +509,11 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
             {historyError && <p className="mx-5 mb-3 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{historyError}</p>}
             {messages.length === 0 ? (
               <div className="px-5 py-16 sm:px-7"><h2 className="text-lg font-semibold">Start the conversation</h2><p className="mt-1 max-w-md text-xs leading-5 text-signal-muted">Messages sent here are saved in {title}.</p></div>
-            ) : messages.map((message) => (
-              <MessageRow archived={archived} currentUserId={user.id} key={`${message.id}:${archived}`} message={message} onDelete={deleteMessage} onEdit={editMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
+            ) : messages.map((message, index) => (
+              <div key={`${message.id}:${archived}`}>
+                {isFirstUnread(message, index) && <div className="my-2 flex items-center gap-3 px-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />Unread<span className="h-px flex-1 bg-signal-amber/35" /></div>}
+                <MessageRow archived={archived} currentUserId={user.id} message={message} onDelete={deleteMessage} onEdit={editMessage} onReact={reactToMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
+              </div>
             ))}
           </div>
         )}
@@ -454,7 +538,7 @@ export function ChannelMessages({ target, user }: { target: ConversationTarget; 
                 aria-describedby={composerError ? "composer-error" : undefined}
                 aria-invalid={Boolean(composerError) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT}
                 className="min-h-16 max-h-48 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-xs leading-5 shadow-none focus-visible:border-0 focus-visible:ring-0"
-                onBlur={() => socketRef.current?.emit("typing:stop", { workspaceId, conversation: conversationRef })}
+                onBlur={() => socketRef.current?.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })}
                 onChange={(event) => { setDraft(event.target.value); if (composerError) setComposerError(""); emitTypingStart() }}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={`Message ${title}`}
