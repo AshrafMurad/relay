@@ -5,6 +5,8 @@ import { z } from "zod";
 import { ApiError } from "../../lib/api-error.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { createChannelSchema } from "../channels/channel.contracts.js";
+import { createChannel, listChannels } from "../channels/channel.service.js";
 import { acceptInvitation, createInvitation, createWorkspace, getWorkspace, listInvitations, listMembers, listWorkspaces } from "./workspace.service.js";
 
 const createWorkspaceSchema = z.object({
@@ -46,6 +48,19 @@ export function createWorkspaceRouter(prisma: PrismaClient) {
     const { workspaceId } = parse(paramsSchema, request.params);
     const workspace = await getWorkspace(prisma, workspaceId, request.authUser!.id);
     response.json({ workspace });
+  }));
+
+  router.get("/:workspaceId/channels", asyncHandler(async (request, response) => {
+    const { workspaceId } = parse(paramsSchema, request.params);
+    const channels = await listChannels(prisma, workspaceId, request.authUser!.id);
+    response.json({ channels });
+  }));
+
+  router.post("/:workspaceId/channels", asyncHandler(async (request, response) => {
+    const { workspaceId } = parse(paramsSchema, request.params);
+    const input = parse(createChannelSchema, request.body);
+    const channel = await createChannel(prisma, workspaceId, request.authUser!.id, input);
+    response.status(201).json({ channel });
   }));
 
   router.get("/:workspaceId/members", asyncHandler(async (request, response) => {

@@ -14,6 +14,7 @@ import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { createChannelRouter } from "./modules/channels/channel.routes.js";
 import { createWorkspaceRouter } from "./modules/workspaces/workspace.routes.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -64,6 +65,7 @@ export function createApp(
     app.use(createAuthMiddleware(dependencies.database.prisma));
     app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
     app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma));
+    app.use("/api/channels", createChannelRouter(dependencies.database.prisma));
   }
 
   app.use("/api/health", createHealthRouter(dependencies.database, dependencies.redis));

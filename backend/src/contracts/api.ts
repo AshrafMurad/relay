@@ -10,7 +10,10 @@ export type ApiErrorCode =
   | "INVITATION_INVALID"
   | "INVITATION_EXPIRED"
   | "INVITATION_ALREADY_USED"
-  | "WORKSPACE_NOT_FOUND";
+  | "WORKSPACE_NOT_FOUND"
+  | "CHANNEL_NOT_FOUND"
+  | "CHANNEL_NAME_TAKEN"
+  | "DEFAULT_CHANNEL_PROTECTED";
 
 export interface ApiErrorResponse {
   error: {

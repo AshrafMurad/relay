@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, type FormEvent } from "react"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { apiRequest, ApiClientError } from "@/lib/api/client"
@@ -280,7 +281,12 @@ export function SprintOneApp() {
               </div>
 
               {activeWorkspace && (
-                <div className="grid gap-6 xl:grid-cols-2">
+                <div className="grid gap-6">
+                  <div className="flex items-center justify-between rounded-xl border border-signal-amber/30 bg-signal-amber/10 p-5">
+                    <div><h2 className="font-semibold">{activeWorkspace.name}</h2><p className="text-sm text-signal-muted">Open the channel workspace.</p></div>
+                    <Button render={<Link href={`/app/${activeWorkspace.slug}`} />}>Enter workspace</Button>
+                  </div>
+                  <div className="grid gap-6 xl:grid-cols-2">
                   <div className="rounded-xl border border-signal-line bg-signal-surface p-5">
                     <h2 className="text-lg font-semibold">Members</h2>
                     <div className="mt-4 grid gap-2">
@@ -292,6 +298,7 @@ export function SprintOneApp() {
                     {canInvite ? <form className="mt-4 grid gap-3" onSubmit={handleInvite}><Field label="Invite email"><input className={inputClass()} name="email" required type="email" /></Field><Field label="Role"><select className={inputClass()} name="role"><option value="MEMBER">Member</option>{activeWorkspace.currentUserRole === "OWNER" && <option value="ADMIN">Admin</option>}</select></Field><Button type="submit">Invite</Button></form> : <p className="mt-3 text-sm text-signal-muted">Members cannot invite teammates.</p>}
                     <form className="mt-5 grid gap-3 border-t border-signal-line pt-5" onSubmit={handleAcceptInvite}><Field label="Accept invitation token"><input className={inputClass()} name="token" required /></Field><Button type="submit" variant="outline">Accept invitation</Button></form>
                     <div className="mt-4 grid gap-2">{invitations.map((invitation) => <div className="rounded-lg border border-signal-line p-3 text-sm" key={invitation.id}>{invitation.email} · {invitation.role}</div>)}</div>
+                  </div>
                   </div>
                 </div>
               )}

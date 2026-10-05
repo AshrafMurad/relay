@@ -54,6 +54,17 @@ export interface WorkspaceInvitationDTO {
   createdAt: string;
 }
 
+export interface ChannelDTO {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  createdById: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ApiErrorResponse {
   error: { code: string; message: string; requestId?: string };
 }

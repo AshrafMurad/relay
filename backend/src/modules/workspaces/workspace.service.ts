@@ -143,6 +143,9 @@ export async function createWorkspace(prisma: PrismaClient, userId: string, inpu
     await transaction.workspaceMember.create({
       data: { workspaceId: workspace.id, userId, role: "OWNER" },
     });
+    await transaction.channel.create({
+      data: { workspaceId: workspace.id, createdById: userId, name: "general" },
+    });
     return toWorkspaceDTO(workspace, "OWNER");
   });
 }
