@@ -4,7 +4,7 @@ Relay is a real-time communication workspace for small remote teams. The reposit
 
 - `frontend/`: Next.js 16 and React 19
 - `backend/`: Express 5, Socket.IO, Prisma, PostgreSQL, and Redis
-- `docker/`: local infrastructure
+- `docker/`: local and production infrastructure
 - `docs/`: product and engineering specifications
 
 ## Prerequisites
@@ -61,7 +61,19 @@ npm --prefix backend run prisma:validate
 npm --prefix backend run prisma:generate
 ```
 
-Product tables and their migrations are introduced by the sprint that owns each domain. Sprint 0 verifies PostgreSQL through Prisma without creating placeholder product models.
+Apply migrations before running the backend against a fresh database:
+
+```powershell
+npm --prefix backend run prisma:migrate:deploy
+```
+
+Seed a demo workspace for screenshots, interviews, and smoke testing:
+
+```powershell
+npm --prefix backend run seed
+```
+
+The seed creates the Northstar Labs workspace with channels, DMs, replies, reactions, read state, and a small text attachment. All demo users use `RelayDemoPass123!` as the password.
 
 ## Development
 
@@ -95,6 +107,7 @@ Run checks inside the application they belong to:
 npm --prefix frontend run lint
 npm --prefix frontend run typecheck
 npm --prefix frontend test
+npm --prefix frontend run test:e2e
 $env:NEXT_PUBLIC_API_URL = "https://relay.example.com/api"
 $env:NEXT_PUBLIC_SOCKET_URL = "https://relay.example.com"
 npm --prefix frontend run build
@@ -112,6 +125,40 @@ npm --prefix backend run build
 ```
 
 The integration tests require the Docker PostgreSQL and Redis services to be running.
+
+## Production Deployment
+
+Production uses one public origin with reverse-proxy path routing:
+
+| Public path | Service |
+| --- | --- |
+| `/` | Next.js web |
+| `/api/*` | Express API |
+| `/socket.io/*` | Express Socket.IO |
+
+Use `docker/.env.production.example` as the Coolify environment checklist. Replace every placeholder secret in Coolify, keep `NEXT_PUBLIC_*` values public-origin only, and mount `relay-uploads` as a persistent volume for backend attachments.
+
+Build and run the production stack locally for a deployment smoke check:
+
+```powershell
+Copy-Item docker/.env.production.example docker/.env.production
+# edit docker/.env.production first
+docker compose --env-file docker/.env.production -f docker/compose.prod.yml up --build
+```
+
+Run the controlled release step after the API image is deployed and before opening traffic to the web service:
+
+```powershell
+docker compose --env-file docker/.env.production -f docker/compose.prod.yml run --rm api npm run prisma:migrate:deploy
+```
+
+Smoke test production with two independent browser sessions/users:
+
+1. Open `/healthz` and `/api/health/ready` and confirm healthy responses.
+2. Sign in as two different demo users or two freshly created users.
+3. Open the same channel, send a message from one browser, and confirm the other receives it live.
+4. Disable/reconnect one browser network and confirm missed messages sync without duplicates.
+5. Upload and download a small allowed attachment to confirm the persistent upload volume is mounted.
 
 ## Shutdown
 
