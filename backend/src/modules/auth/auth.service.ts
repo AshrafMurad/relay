@@ -8,7 +8,6 @@ import { ApiError } from "../../lib/api-error.js";
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE_NAME = "relay_session";
 const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
-const VERIFICATION_LIFETIME_MS = 60 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
 
@@ -97,9 +96,8 @@ export async function signUp(
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new ApiError(400, "VALIDATION_ERROR", "An account already exists for this email.");
 
-  const verificationToken = createToken();
   const user = await prisma.$transaction(async (transaction) => {
-    const createdUser = await transaction.user.create({ data: { email, name } });
+    const createdUser = await transaction.user.create({ data: { email, name, emailVerified: true } });
     await transaction.account.create({
       data: {
         userId: createdUser.id,
@@ -108,17 +106,10 @@ export async function signUp(
         password: await hashPassword(input.password),
       },
     });
-    await transaction.verification.create({
-      data: {
-        identifier: `email:${email}`,
-        valueHash: hashToken(verificationToken),
-        expiresAt: new Date(Date.now() + VERIFICATION_LIFETIME_MS),
-      },
-    });
     return createdUser;
   });
 
-  return { user: toAuthUserDTO(user), verificationToken };
+  return { user: toAuthUserDTO(user) };
 }
 
 export async function verifyEmail(prisma: PrismaClient, token: string) {
@@ -150,10 +141,6 @@ export async function signIn(
   if (!account || !(await verifyPassword(input.password, account.password))) {
     throw new ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
   }
-  if (!account.user.emailVerified) {
-    throw new ApiError(403, "EMAIL_NOT_VERIFIED", "Verify your email before signing in.");
-  }
-
   const { token } = await createSession(prisma, account.userId, requestMeta);
   return { token, user: toAuthUserDTO(account.user) };
 }

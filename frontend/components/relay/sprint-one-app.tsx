@@ -51,7 +51,6 @@ export function SprintOneApp() {
   const [members, setMembers] = useState<WorkspaceMemberDTO[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitationDTO[]>([])
   const [status, setStatus] = useState<Status>(null)
-  const [verificationToken, setVerificationToken] = useState("")
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
   const canInvite = activeWorkspace?.currentUserRole === "OWNER" || activeWorkspace?.currentUserRole === "ADMIN"
@@ -108,54 +107,6 @@ export function SprintOneApp() {
       cancelled = true
     }
   }, [activeWorkspaceId, canInvite])
-
-  async function handleSignUp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    try {
-      const result = await apiRequest<{ user: AuthUserDTO; verificationToken: string }>("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({
-          name: form.get("name"),
-          email: form.get("email"),
-          password: form.get("password"),
-        }),
-      })
-      setVerificationToken(result.verificationToken)
-      setStatus({ tone: "success", message: "Account created. Verify the email token before signing in." })
-    } catch (error) {
-      setStatus(errorStatus(error))
-    }
-  }
-
-  async function handleVerify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    try {
-      await apiRequest<{ user: AuthUserDTO }>("/auth/verify-email", {
-        method: "POST",
-        body: JSON.stringify({ token: form.get("token") }),
-      })
-      setStatus({ tone: "success", message: "Email verified. You can sign in now." })
-    } catch (error) {
-      setStatus(errorStatus(error))
-    }
-  }
-
-  async function handleSignIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    try {
-      const result = await apiRequest<{ user: AuthUserDTO }>("/auth/signin", {
-        method: "POST",
-        body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
-      })
-      setUser(result.user)
-      setStatus({ tone: "success", message: "Signed in." })
-    } catch (error) {
-      setStatus(errorStatus(error))
-    }
-  }
 
   async function handleCreateWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -223,7 +174,7 @@ export function SprintOneApp() {
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-signal-amber">Relay Sprint 1</p>
           <h1 className="mt-3 text-3xl font-semibold text-signal-panel-text">Identity and workspace access</h1>
           <p className="mt-3 text-sm leading-6 text-signal-panel-muted">
-            Create an account, verify email, create workspaces, invite teammates, and validate role-based access.
+            Create an account, create workspaces, invite teammates, and validate role-based access.
           </p>
           <div className="mt-5"><StatusMessage status={status} /></div>
           {user ? (
@@ -233,25 +184,12 @@ export function SprintOneApp() {
               <Button className="mt-4" onClick={handleSignOut} type="button" variant="outline">Sign out</Button>
             </div>
           ) : (
-            <div className="mt-6 grid gap-5">
-              <form className="grid gap-3" onSubmit={handleSignUp}>
-                <h2 className="text-sm font-semibold text-signal-panel-text">Sign up</h2>
-                <Field label="Name"><input className={inputClass()} name="name" required /></Field>
-                <Field label="Email"><input className={inputClass()} name="email" required type="email" /></Field>
-                <Field label="Password"><input className={inputClass()} minLength={12} name="password" required type="password" /></Field>
-                <Button type="submit">Create account</Button>
-              </form>
-              <form className="grid gap-3" onSubmit={handleVerify}>
-                <h2 className="text-sm font-semibold text-signal-panel-text">Verify email</h2>
-                <Field label="Verification token"><input className={inputClass()} defaultValue={verificationToken} name="token" required /></Field>
-                <Button type="submit" variant="outline">Verify</Button>
-              </form>
-              <form className="grid gap-3" onSubmit={handleSignIn}>
-                <h2 className="text-sm font-semibold text-signal-panel-text">Sign in</h2>
-                <Field label="Email"><input className={inputClass()} name="email" required type="email" /></Field>
-                <Field label="Password"><input className={inputClass()} name="password" required type="password" /></Field>
-                <Button type="submit">Sign in</Button>
-              </form>
+            <div className="mt-6 grid gap-3 rounded-lg border border-white/10 bg-black/10 p-4">
+              <p className="text-sm text-signal-panel-muted">Use the dedicated auth pages, then return here to create or enter a workspace.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button render={<Link href="/login" />} type="button">Log in</Button>
+                <Button render={<Link href="/signup" />} type="button" variant="outline">Sign up</Button>
+              </div>
             </div>
           )}
         </section>
