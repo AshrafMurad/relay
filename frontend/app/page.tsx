@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowRight, CheckCircle2, Clock3, MessageSquare, RadioTower, ShieldCheck } from "lucide-react"
 
+import { BrandLogo } from "@/components/relay/brand-logo"
 import { Button } from "@/components/ui/button"
 
 export default function Home() {
@@ -8,9 +9,8 @@ export default function Home() {
     <main className="h-dvh overflow-y-auto bg-signal-carbon text-signal-panel-text">
       <section className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-4 py-4 md:px-6 lg:px-8 lg:py-6">
         <nav className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-signal-panel px-4 py-3 md:px-5" aria-label="Public navigation">
-          <Link className="flex items-center gap-3" href="/" aria-label="Relay home">
-            <span className="grid size-10 place-items-center rounded-lg bg-signal-amber text-sm font-bold text-signal-carbon">R</span>
-            <span className="text-sm font-semibold tracking-tight">Relay</span>
+          <Link className="flex w-32 items-center" href="/" aria-label="Relay home">
+            <BrandLogo priority />
           </Link>
           <div className="flex items-center gap-2">
             <Button nativeButton={false} render={<Link href="/login" />} size="sm" variant="ghost">Log in</Button>

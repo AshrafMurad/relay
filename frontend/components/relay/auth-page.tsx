@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, RadioTower, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { BrandLogo } from "@/components/relay/brand-logo"
 import { apiRequest, ApiClientError } from "@/lib/api/client"
 import type { AuthUserDTO } from "@/lib/api/contracts"
 import { cn } from "@/lib/utils"
@@ -132,9 +133,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           <div className="absolute bottom-0 left-10 top-24 w-px bg-signal-amber/35" aria-hidden="true" />
           <div className="relative flex h-full min-h-[520px] flex-col justify-between gap-10">
             <div>
-              <Link className="inline-flex items-center gap-3" href="/" aria-label="Relay home">
-                <span className="grid size-10 place-items-center rounded-lg bg-signal-amber text-sm font-bold text-signal-carbon">R</span>
-                <span className="font-semibold">Relay</span>
+              <Link className="inline-flex w-32" href="/" aria-label="Relay home">
+                <BrandLogo priority />
               </Link>
 
               <div className="mt-12 max-w-2xl">
@@ -173,7 +173,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   </Link>
                 </p>
               </div>
-              <span className="grid size-10 place-items-center rounded-lg bg-signal-carbon text-sm font-bold text-signal-panel-text">R</span>
+              <span className="block size-10"><BrandLogo mark="icon" /></span>
             </div>
 
             <form className="mt-5 grid gap-4" noValidate onSubmit={handleSubmit}>

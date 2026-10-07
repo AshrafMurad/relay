@@ -20,6 +20,7 @@ import {
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { BrandLogo } from "@/components/relay/brand-logo"
 import { ChannelMessages } from "@/components/relay/channel-messages"
 import {
   DropdownMenu,
@@ -56,22 +57,11 @@ function fieldClass() {
   return "h-10 rounded-md border border-signal-line bg-signal-surface px-3 text-sm text-signal-ink outline-none transition focus:border-signal-cyan focus:ring-2 focus:ring-signal-cyan/15"
 }
 
-function RelayMark() {
-  return (
-    <svg aria-hidden="true" className="size-8" viewBox="0 0 32 32" fill="none">
-      <path d="M8 7h8.5a5.5 5.5 0 0 1 0 11H8m8.5 0L24 26" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" />
-      <rect x="5" y="4" width="5" height="5" rx="1" fill="currentColor" />
-      <rect x="5" y="15.5" width="5" height="5" rx="1" fill="currentColor" />
-      <rect x="22" y="23" width="5" height="5" rx="1" fill="currentColor" />
-    </svg>
-  )
-}
-
 function LoadingShell() {
   return (
     <main className="grid h-dvh place-items-center bg-signal-paper p-6 text-signal-ink">
       <div className="w-full max-w-sm text-center" role="status">
-        <div className="mx-auto grid size-12 place-items-center rounded-lg bg-signal-carbon text-signal-amber"><RelayMark /></div>
+        <div className="mx-auto size-12"><BrandLogo mark="icon" priority /></div>
         <p className="mt-4 text-sm font-semibold">Opening workspace</p>
         <p className="mt-1 text-xs text-signal-muted">Loading routes, members, and unread state.</p>
         <div className="mt-5 space-y-2" aria-hidden="true">
@@ -272,7 +262,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     return (
       <main className="grid h-dvh place-items-center bg-signal-paper p-6 text-signal-ink">
         <section className="max-w-md text-center">
-          <div className="mx-auto grid size-12 place-items-center rounded-lg bg-signal-carbon text-signal-amber"><RelayMark /></div>
+          <div className="mx-auto size-12"><BrandLogo mark="icon" priority /></div>
           <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-signal-amber">Workspace unavailable</p>
           <h1 className="mt-3 text-xl font-semibold">This workspace could not be opened</h1>
           <p className="mt-2 text-sm text-signal-muted">{error || "Your membership may have changed."}</p>
@@ -394,7 +384,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       <div className="grid h-dvh overflow-hidden bg-signal-paper text-signal-ink md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[64px_260px_minmax(0,1fr)]">
         {children}
         <aside className="hidden h-dvh flex-col items-center border-r border-signal-line bg-signal-carbon py-3 md:flex">
-          <div className="mb-4 text-signal-amber"><RelayMark /><span className="sr-only">Relay</span></div>
+          <div className="mb-4 size-8"><BrandLogo mark="icon" priority /><span className="sr-only">Relay</span></div>
           <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2">
             {workspaces.map((item) => (
               <Tooltip key={item.id}>
@@ -446,7 +436,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           {isSwitchingWorkspace ? (
             <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10" role="status">
               <div className="max-w-md rounded-lg border border-signal-line bg-signal-surface/50 px-5 py-6 text-center">
-                <div className="mx-auto mb-4 grid size-10 place-items-center rounded-lg bg-signal-carbon text-signal-amber"><RelayMark /></div>
+                <div className="mx-auto mb-4 size-10"><BrandLogo mark="icon" /></div>
                 <h2 className="text-base font-semibold">Switching to {targetWorkspace?.name ?? "workspace"}</h2>
                 <p className="mt-2 text-sm text-signal-muted">Refreshing channels, members, and direct messages.</p>
               </div>
