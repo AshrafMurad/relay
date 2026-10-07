@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import { AlertCircle, CornerUpLeft, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, SmilePlus, Trash2, X } from "lucide-react"
+import { AlertCircle, AtSign, CornerUpLeft, MessageSquareText, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, Smile, SmilePlus, Trash2, UserPlus, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -66,6 +66,7 @@ function formatFileSize(bytes: number) {
 function MessageRow({
   archived,
   currentUserId,
+  grouped,
   message,
   onDelete,
   onEdit,
@@ -75,6 +76,7 @@ function MessageRow({
 }: {
   archived: boolean
   currentUserId: string
+  grouped: boolean
   message: ClientMessage
   onDelete: (message: ClientMessage) => Promise<void>
   onEdit: (message: ClientMessage, content: string) => Promise<void>
@@ -111,18 +113,18 @@ function MessageRow({
   }
 
   return (
-    <article className={cn("group relative flex gap-3 px-4 py-2.5 transition-colors hover:bg-signal-surface/60 focus-within:bg-signal-surface/60 sm:px-7", message.delivery === "failed" && "bg-destructive/5")}>
-      <Avatar className="mt-0.5 size-8 rounded-lg">
+    <article className={cn("group relative flex gap-3 px-4 transition-colors hover:bg-signal-surface/55 focus-within:bg-signal-surface/55 sm:px-7", grouped ? "py-1" : "pb-1.5 pt-3", message.delivery === "failed" && "bg-destructive/5")}>
+      {grouped ? <time className="text-metadata mt-1.5 w-8 shrink-0 text-center text-signal-muted opacity-0 transition-opacity group-hover:opacity-100" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time> : <Avatar className="mt-0.5 size-8 rounded-lg">
         {message.author.image && <AvatarImage alt="" className="rounded-lg" src={message.author.image} />}
         <AvatarFallback className="text-metadata rounded-lg bg-signal-surface-raised font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
-      </Avatar>
+      </Avatar>}
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-baseline gap-2 pr-8">
+        {!grouped && <div className="flex min-w-0 items-baseline gap-2 pr-8">
           <span className="truncate text-xs font-semibold">{message.author.name}</span>
           <time className="text-metadata shrink-0 text-signal-muted" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time>
           {message.editedAt && !message.deletedAt && <span className="text-metadata text-signal-muted">edited</span>}
           {deliveryLabel && <span className={cn("text-metadata rounded-full border px-1.5 py-0.5", message.delivery === "failed" ? "border-destructive/30 text-destructive" : "border-signal-cyan/30 text-signal-cyan-ink")}>{deliveryLabel}</span>}
-        </div>
+        </div>}
         <ReplyPreview message={message} />
         {editing ? (
           <form className="mt-1 max-w-[72ch]" onSubmit={submitEdit}>
@@ -134,9 +136,9 @@ function MessageRow({
             </div>
           </form>
         ) : message.deletedAt ? (
-          <p className="max-w-[72ch] text-xs italic leading-5 text-signal-muted">This message was deleted.</p>
+          <p className="text-body max-w-[72ch] italic text-signal-muted">This message was deleted.</p>
         ) : (
-          <p className="max-w-[72ch] whitespace-pre-wrap break-words text-xs leading-5">{message.content}</p>
+          <p className="text-body max-w-[72ch] whitespace-pre-wrap break-words">{message.content}</p>
         )}
         {message.attachments.length > 0 && !message.deletedAt && (
           <div className="mt-2 flex max-w-[72ch] flex-wrap gap-2">
@@ -200,7 +202,7 @@ type ConversationTarget =
   | { type: "channel"; channel: ChannelDTO }
   | { type: "dm"; conversation: DirectConversationDTO }
 
-export function ChannelMessages({ onActivity, onReadState, target, user }: { onActivity?: (conversation: { type: "channel" | "dm"; id: string }, message: MessageDTO) => void; onReadState?: (readState: ConversationReadStateDTO) => void; target: ConversationTarget; user: AuthUserDTO }) {
+export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, onPresence, onReadState, target, user }: { onActivity?: (conversation: { type: "channel" | "dm"; id: string }, message: MessageDTO) => void; onAddDescription?: () => void; onInvitePeople?: () => void; onPresence?: (userId: string, status: "online" | "offline") => void; onReadState?: (readState: ConversationReadStateDTO) => void; target: ConversationTarget; user: AuthUserDTO }) {
   const [historyState, setHistoryState] = useState<HistoryState>("loading")
   const [messages, setMessages] = useState<ClientMessage[]>([])
   const [historyError, setHistoryError] = useState("")
@@ -223,6 +225,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
   const initialRequest = useRef(0)
   const typingStopTimeout = useRef<number | null>(null)
   const lastTypingStart = useRef(0)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
   const archived = target.type === "channel" && Boolean(target.channel.archivedAt)
   const conversationId = target.type === "channel" ? target.channel.id : target.conversation.id
   const workspaceId = target.type === "channel" ? target.channel.workspaceId : target.conversation.workspaceId
@@ -233,6 +236,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
   const draftCodePoints = Array.from(draft.trim()).length
   const reportActivity = useEffectEvent((message: MessageDTO) => onActivity?.({ type: target.type, id: conversationId }, message))
   const reportReadState = useEffectEvent((readState: ConversationReadStateDTO) => onReadState?.(readState))
+  const reportPresence = useEffectEvent((userId: string, status: "online" | "offline") => onPresence?.(userId, status))
 
   async function loadInitial() {
     const request = ++initialRequest.current
@@ -303,6 +307,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
       if (event.readState.userId === user.id) setLastReadMessageId(event.readState.lastReadMessageId)
       reportReadState(event.readState)
     })
+    socket.on("presence:update", (event) => reportPresence(event.userId, event.status))
     socket.on("typing:update", (event) => {
       if (event.conversation.type !== target.type || event.conversation.id !== conversationId || event.user.id === user.id) return
       setTypingUsers((current) => event.typing
@@ -543,8 +548,8 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label={`Messages in ${title}`}>
-      <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
+    <section className="flex min-h-0 flex-1 flex-col bg-background" aria-label={`Messages in ${title}`}>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-background" ref={scrollRef}>
         {historyState === "loading" && (
           <div className="grid min-h-full place-items-center p-6" role="status">
             <div className="w-full max-w-xl space-y-3" aria-label="Loading message history">
@@ -572,23 +577,33 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
             {hasMore && <div className="flex justify-center px-5 pb-3"><Button disabled={loadingOlder} onClick={() => void loadOlder()} size="sm" variant="outline">{loadingOlder ? "Loading..." : "Load older messages"}</Button></div>}
             {historyError && <p className="mx-5 mb-3 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{historyError}</p>}
             {messages.length === 0 ? (
-              <div className="px-4 py-16 sm:px-7">
-                <div className="max-w-md rounded-lg border border-dashed border-signal-line bg-signal-surface/45 px-4 py-5">
-                  <h2 className="text-sm font-semibold">Start the conversation</h2>
-                  <p className="mt-1 text-xs leading-5 text-signal-muted">Messages sent here are saved in {title} and recover after reconnect.</p>
+              <div className="flex min-h-[420px] items-center px-4 py-14 sm:px-7">
+                <div className="w-full max-w-xl border-y border-signal-line py-8">
+                  <span className="grid size-10 place-items-center rounded-lg border border-signal-line bg-signal-surface text-signal-amber"><MessageSquareText className="size-5" /></span>
+                  <h2 className="mt-5 text-lg font-semibold tracking-[-0.02em]">{target.type === "channel" ? `Welcome to #${target.channel.name}` : `Start a conversation with ${target.conversation.otherUser.name}`}</h2>
+                  <p className="mt-2 max-w-[62ch] text-sm leading-6 text-signal-muted">{target.type === "channel" ? target.channel.description || "This is the beginning of the channel. Share an update, ask a question, or bring the team into the conversation." : "Messages are private to this conversation and recover safely after reconnect."}</p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Button onClick={() => composerRef.current?.focus()} size="sm" type="button"><MessageSquareText /> Start a conversation</Button>
+                    {target.type === "channel" && onAddDescription && !target.channel.description && <Button onClick={onAddDescription} size="sm" type="button" variant="outline"><Pencil /> Add description</Button>}
+                    {target.type === "channel" && onInvitePeople && <Button onClick={onInvitePeople} size="sm" type="button" variant="ghost"><UserPlus /> Invite people</Button>}
+                  </div>
+                  <p className="text-helper mt-5 flex items-center gap-2 text-signal-muted"><span className="size-1.5 rounded-full bg-signal-cyan" /> Messages are saved and recover after reconnect.</p>
                 </div>
               </div>
-            ) : messages.map((message, index) => (
-              <div key={`${message.id}:${archived}`}>
-                {isFirstUnread(message, index) && <div className="text-metadata my-2 flex items-center gap-3 px-5 font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />Unread<span className="h-px flex-1 bg-signal-amber/35" /></div>}
-                <MessageRow archived={archived} currentUserId={user.id} message={message} onDelete={deleteMessage} onEdit={editMessage} onReact={reactToMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
+            ) : messages.map((message, index) => {
+              const previous = messages[index - 1]
+              const unread = isFirstUnread(message, index)
+              const grouped = !unread && message.delivery !== "sending" && message.delivery !== "failed" && !message.editedAt && Boolean(previous && previous.author.id === message.author.id && new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime() < 5 * 60_000)
+              return <div key={`${message.id}:${archived}`}>
+                {unread && <div className="text-metadata my-3 flex items-center gap-3 px-5 font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />New messages<span className="h-px flex-1 bg-signal-amber/35" /></div>}
+                <MessageRow archived={archived} currentUserId={user.id} grouped={grouped} message={message} onDelete={deleteMessage} onEdit={editMessage} onReact={reactToMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
               </div>
-            ))}
+            })}
           </div>
         )}
       </div>
 
-      <div className="shrink-0 border-t border-signal-line bg-signal-paper px-3 py-3 sm:px-5">
+      <div className="shrink-0 border-t border-signal-line bg-background/95 px-3 py-3 sm:px-5">
         {archived ? (
           <div className="mx-auto max-w-6xl rounded-md border border-signal-line bg-signal-surface px-3 py-2.5 text-xs text-signal-muted"><span className="font-semibold text-signal-ink">Read-only archive.</span> This channel history remains available, but messages, replies, reactions, and attachments are closed.</div>
         ) : (
@@ -603,10 +618,11 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
             <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
               {typingUsers.length > 0 && <p className="text-helper border-b border-signal-line px-3 py-1.5 text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
               <Textarea
+                ref={composerRef}
                 aria-label={`Message ${title}`}
                 aria-describedby={composerError ? "composer-error" : undefined}
                 aria-invalid={Boolean(composerError) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT}
-                className="min-h-16 max-h-48 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-xs leading-5 shadow-none focus-visible:border-0 focus-visible:ring-0"
+                className="min-h-18 max-h-48 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-sm leading-5 shadow-none focus-visible:border-0 focus-visible:ring-0"
                 onBlur={() => socketRef.current?.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })}
                 onChange={(event) => { setDraft(event.target.value); if (composerError) setComposerError(""); emitTypingStart() }}
                 onKeyDown={handleComposerKeyDown}
@@ -624,15 +640,17 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
                   ))}
                 </div>
               )}
-              <div className="flex min-h-9 items-center gap-3 border-t border-signal-line px-2.5">
-                <label className={cn("text-metadata inline-flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-signal-muted hover:text-signal-ink", uploadingAttachment && "pointer-events-none opacity-50")}>
-                  <Paperclip className="size-3" /> {uploadingAttachment ? "Uploading" : "Attach"}
+              <div className="flex min-h-10 items-center gap-1 border-t border-signal-line px-2.5">
+                <label aria-label="Attach a file" className={cn("inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-signal-muted transition-colors hover:bg-signal-surface-raised hover:text-signal-ink", uploadingAttachment && "pointer-events-none opacity-50")}>
+                  <Paperclip className="size-3.5" />
                   <input className="sr-only" disabled={uploadingAttachment || pendingAttachments.length >= 5} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.currentTarget.value = "" }} type="file" />
                 </label>
-                <span className={cn("text-metadata text-signal-muted", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
-                <span className="text-metadata hidden text-signal-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
-                <span className={cn("text-metadata inline-flex items-center gap-1", socketState === "connected" ? "text-signal-cyan-ink" : "text-signal-muted")} aria-live="polite"><span className={cn("size-1.5 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} />{connectionCopy}</span>
-                <Button aria-label="Send message" className="ml-auto size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
+                <Button aria-label="Add emoji" onClick={() => { setDraft((current) => `${current}🙂`); composerRef.current?.focus() }} size="icon-sm" type="button" variant="ghost"><Smile /></Button>
+                <Button aria-label="Mention someone" onClick={() => { setDraft((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}@`); composerRef.current?.focus() }} size="icon-sm" type="button" variant="ghost"><AtSign /></Button>
+                <span className="mx-1 h-4 w-px bg-signal-line" />
+                <span className={cn("text-metadata hidden text-signal-muted sm:inline", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
+                <span className={cn("text-metadata ml-auto inline-flex items-center gap-1.5", socketState === "connected" ? "text-signal-cyan-ink" : "text-signal-muted")} aria-live="polite"><span className={cn("size-1.5 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} />{connectionCopy}</span>
+                <Button aria-label="Send message" className="ml-2 size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
               </div>
             </div>
             {composerError && <p className="text-helper mt-1.5 text-destructive" id="composer-error" role="alert">{composerError}</p>}

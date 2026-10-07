@@ -73,4 +73,13 @@ describe("PublicNavigation", () => {
     expect(document.documentElement.style.colorScheme).toBe("light")
     expect(window.localStorage.getItem("relay:theme")).toBe("light")
   })
+
+  it("applies theme changes received from another tab", () => {
+    render(<PublicSessionProvider initialUser={null}><PublicNavigation /></PublicSessionProvider>)
+
+    window.dispatchEvent(new StorageEvent("storage", { key: "relay:theme", newValue: "light" }))
+    expect(document.documentElement.classList.contains("dark")).toBe(false)
+    expect(document.documentElement.dataset.theme).toBe("light")
+    expect(document.documentElement.style.colorScheme).toBe("light")
+  })
 })

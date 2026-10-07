@@ -194,7 +194,7 @@ The palette combines blue-black work surfaces, warm paper, mineral neutrals, Rel
 
 - **Headline** (600, 14px, 1.25): Workspace, conversation, and thread titles.
 - **Title** (600, 12px, 1.25): Message authors, attachment titles, and emphasized navigation.
-- **Body** (400, 12px, 20px): Primary message copy, limited to 82ch in the conversation stream.
+- **Body** (400, 14px, 1.625): Primary message copy and form-support content, limited to 82ch in the conversation stream.
 - **Label** (500, 10px, 1.25): Tabs, reactions, compact actions, section labels, and connection details. Supporting UI may step down to 8-9px where the implementation does so for tertiary metadata.
 - **Metadata** (400, 9px, 1.25): Timestamps, keyboard shortcuts, commit hashes, latency, and other machine-readable state.
 
@@ -215,7 +215,7 @@ Relay fills the dynamic viewport and keeps body overflow contained inside purpos
 
 The top-level workspace, conversation, and thread headers are 60px high. The conversation tab bar is 44px high. Navigation rows are generally 32px high; direct-message rows are 36px. The message stream is centered to a 1152px maximum, message copy is capped at 82ch, ordinary attachment cards at 520px, and the visual preview at 480px. Horizontal message padding progresses from 20px to 28px at 640px; the composer progresses from 12px to 20px.
 
-The desktop sequence is fixed: workspace rail, navigation, conversation, optional thread. Global destinations precede channels and direct messages. The composer anchors the conversation bottom, the connection control anchors the navigation bottom, and each region scrolls independently so orientation is preserved.
+The desktop sequence is fixed: workspace rail, navigation, conversation, optional thread. Global destinations precede channels and direct messages. The composer anchors the conversation bottom, account and theme controls anchor the navigation bottom, and each region scrolls independently so orientation is preserved. Connection state remains attached to the composer where message delivery decisions occur.
 
 **The Conversation-First Rule.** Narrow layouts remove persistent secondary columns rather than compressing the desktop grid; drawers preserve access without stealing reading width.
 
@@ -272,10 +272,10 @@ Relay-specific components compose installed shadcn/ui primitives. Reuse `Button`
 
 ### Navigation
 
-- **Workspace rail:** A 64px carbon rail with 40px workspace tiles, orange Relay mark, a left orange current-workspace marker, and compact unread dots.
-- **Sidebar:** A 250px panel with global destinations first, then channels and direct messages. Active channels combine orange text, a 12% orange wash, a two-pixel route marker, bold type, and `aria-current`; unread routes combine weight with a dot.
+- **Workspace rail:** A 64px carbon rail with 40px workspace tiles, orange Relay mark, a left orange current-workspace marker, compact unread dots, and an All workspaces action at the bottom.
+- **Sidebar:** A 260px panel with an identity-rich workspace switcher, global destinations first, then channels and direct messages. Active channels combine orange text, a 12% orange wash, a two-pixel route marker, bold type, and `aria-current`; unread routes combine weight with a count. DM rows use stable initials. The footer groups signed-in identity, theme, and sign-out actions.
 - **Conversation tabs:** A quiet 44px line-tab bar. The active item receives a two-pixel orange underline; labels remain compact and secondary tabs hide selectively on narrow screens.
-- **Mobile:** Navigation moves to a left sheet. It is not a squeezed permanent column.
+- **Mobile:** Navigation moves to a left sheet containing workspace, route, account, and theme controls. It is not a squeezed permanent column. Search remains reachable from the conversation header.
 
 ### Messages, Attachments, and Threads
 
