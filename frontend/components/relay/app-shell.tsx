@@ -83,10 +83,11 @@ function LoadingShell() {
   )
 }
 
-export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode; workspaceSlug: string }) {
+export function RelayAppShell({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const params = useParams<{ channelId?: string | string[]; conversationId?: string | string[] }>()
+  const params = useParams<{ workspaceSlug?: string | string[]; channelId?: string | string[]; conversationId?: string | string[] }>()
+  const workspaceSlug = typeof params.workspaceSlug === "string" ? params.workspaceSlug : ""
   const channelId = typeof params.channelId === "string" ? params.channelId : null
   const conversationId = typeof params.conversationId === "string" ? params.conversationId : null
   const [state, setState] = useState<LoadState>("loading")
@@ -105,12 +106,15 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
 
   const selectedChannel = channels.find((channel) => channel.id === channelId) ?? null
   const selectedDirectConversation = directConversations.find((conversation) => conversation.id === conversationId) ?? null
+  const targetWorkspace = workspaces.find((item) => item.slug === workspaceSlug) ?? workspace
+  const isSwitchingWorkspace = state === "loading" && Boolean(workspace && user && workspaceSlug)
   const mayManage = workspace ? canManageChannels(workspace.currentUserRole) : false
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
+      if (!workspaceSlug) return
       setState("loading")
       setError("")
       try {
@@ -133,7 +137,6 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
         setMembers(workspaceMembers)
         setDirectConversations(conversations)
         setState("ready")
-
       } catch (caught) {
         if (cancelled) return
         if (caught instanceof ApiClientError && caught.code === "UNAUTHORIZED") {
@@ -263,7 +266,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
     root.style.colorScheme = root.classList.contains("dark") ? "dark" : "light"
   }
 
-  if (state === "loading") return <LoadingShell />
+  if (!workspaceSlug || (state === "loading" && (!workspace || !user))) return <LoadingShell />
 
   if (state === "error" || !workspace || !user) {
     return (
@@ -284,7 +287,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
       <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-signal-line px-4">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button className="min-w-0 flex-1 justify-start px-2 text-signal-panel-text" variant="ghost" />}>
-            <span className="truncate">{workspace.name}</span><ChevronDown className="ml-auto size-3" />
+            <span className="truncate">{targetWorkspace?.name ?? workspace.name}</span><ChevronDown className="ml-auto size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-60">
             <DropdownMenuGroup>
@@ -297,7 +300,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
         </DropdownMenu>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className={cn("min-h-0 flex-1", isSwitchingWorkspace && "pointer-events-none opacity-55")}>
         <div className="p-3">
           <Link className={cn("mb-2 flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", pathname.endsWith("/search") ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text")} href={`/app/${workspace.slug}/search`} onClick={() => setNavigationOpen(false)}>
             <Search className="size-3.5" /> Search messages
@@ -395,7 +398,7 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
           <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2">
             {workspaces.map((item) => (
               <Tooltip key={item.id}>
-                <TooltipTrigger render={<Link aria-current={item.id === workspace.id ? "page" : undefined} className={cn("grid size-10 place-items-center rounded-lg border text-[10px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", item.id === workspace.id ? "border-signal-amber bg-white/8 text-signal-panel-text" : "border-white/10 text-signal-panel-muted hover:border-white/25")} href={`/app/${item.slug}`} />}>
+                <TooltipTrigger render={<Link aria-current={item.slug === workspaceSlug ? "page" : undefined} className={cn("grid size-10 place-items-center rounded-lg border text-[10px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", item.slug === workspaceSlug ? "border-signal-amber bg-white/8 text-signal-panel-text" : "border-white/10 text-signal-panel-muted hover:border-white/25")} href={`/app/${item.slug}`} />}>
                   {initials(item.name)}
                 </TooltipTrigger>
                 <TooltipContent side="right">{item.name}</TooltipContent>
@@ -440,7 +443,15 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
 
           {error && state === "ready" && <p className="border-b border-destructive/25 bg-destructive/10 px-5 py-2 text-xs text-destructive" role="alert">{error}</p>}
 
-          {selectedDirectConversation ? (
+          {isSwitchingWorkspace ? (
+            <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10" role="status">
+              <div className="max-w-md rounded-lg border border-signal-line bg-signal-surface/50 px-5 py-6 text-center">
+                <div className="mx-auto mb-4 grid size-10 place-items-center rounded-lg bg-signal-carbon text-signal-amber"><RelayMark /></div>
+                <h2 className="text-base font-semibold">Switching to {targetWorkspace?.name ?? "workspace"}</h2>
+                <p className="mt-2 text-sm text-signal-muted">Refreshing channels, members, and direct messages.</p>
+              </div>
+            </section>
+          ) : selectedDirectConversation ? (
             <ChannelMessages key={selectedDirectConversation.id} onActivity={updateConversationActivity} onReadState={updateReadState} target={{ type: "dm", conversation: selectedDirectConversation }} user={user} />
           ) : selectedChannel ? (
             <ChannelMessages key={selectedChannel.id} onActivity={updateConversationActivity} onReadState={updateReadState} target={{ type: "channel", channel: selectedChannel }} user={user} />
