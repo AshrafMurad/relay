@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { BrandLogo } from "@/components/relay/brand-logo"
 import { ChannelMessages } from "@/components/relay/channel-messages"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +100,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   const selectedDirectConversation = directConversations.find((conversation) => conversation.id === conversationId) ?? null
   const targetWorkspace = workspaces.find((item) => item.slug === workspaceSlug) ?? workspace
   const isSwitchingWorkspace = state === "loading" && Boolean(workspace && user && workspaceSlug)
+  const isMembersPage = pathname.endsWith("/members")
+  const isSearchPage = pathname.endsWith("/search")
+  const isUtilityPage = isMembersPage || isSearchPage
   const mayManage = workspace ? canManageChannels(workspace.currentUserRole) : false
 
   useEffect(() => {
@@ -258,6 +262,13 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     root.style.colorScheme = root.classList.contains("dark") ? "dark" : "light"
   }
 
+  function closeUtilityPage() {
+    if (!workspace) return
+    const firstChannel = channels.find((channel) => !channel.archivedAt) ?? channels[0]
+    const destination = firstChannel ? `/app/${workspace.slug}/channels/${firstChannel.id}` : `/app/${workspace.slug}`
+    startTransition(() => router.replace(destination))
+  }
+
   if (!workspaceSlug || (state === "loading" && (!workspace || !user))) return <LoadingShell />
 
   if (state === "error" || !workspace || !user) {
@@ -389,7 +400,6 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   return (
     <TooltipProvider>
       <div className="grid h-dvh overflow-hidden bg-signal-paper text-signal-ink md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[64px_260px_minmax(0,1fr)]">
-        {children}
         <aside className="hidden h-dvh flex-col items-center border-r border-signal-line bg-signal-carbon py-3 md:flex">
           <div className="mb-4 size-8"><BrandLogo mark="icon" priority /><span className="sr-only">Relay</span></div>
           <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2">
@@ -462,6 +472,16 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
             </section>
           )}
         </main>
+
+        <Dialog open={isUtilityPage} onOpenChange={(open) => { if (!open) closeUtilityPage() }}>
+          <DialogContent className={cn("max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-lg border border-signal-line bg-signal-paper p-0 text-signal-ink ring-0 sm:max-w-2xl", isMembersPage && "sm:max-w-4xl")}>
+            <DialogHeader className="shrink-0 border-b border-signal-line px-5 py-4 pr-12 text-left">
+              <DialogTitle>{isMembersPage ? "Workspace members" : "Search messages"}</DialogTitle>
+              <DialogDescription>{isMembersPage ? `Manage access to ${workspace.name} and share pending invitations.` : `Find messages across channels and direct conversations in ${workspace.name}.`}</DialogDescription>
+            </DialogHeader>
+            {children}
+          </DialogContent>
+        </Dialog>
 
         <Sheet onOpenChange={setFormOpen} open={formOpen}>
           <SheetContent className="w-[min(92vw,420px)] border-signal-line bg-signal-paper" side="right">

@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, type FormEvent, type ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, RadioTower, ShieldCheck } from "lucide-react"
+import { ArrowRight, Bell, Hash, RadioTower, UserRound, Zap, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { BrandLogo } from "@/components/relay/brand-logo"
@@ -19,7 +20,7 @@ const PASSWORD_MIN_LENGTH = 6
 const PASSWORD_MAX_LENGTH = 128
 
 function inputClass() {
-  return "h-11 rounded-md border border-signal-line bg-signal-surface px-3 text-sm text-signal-ink outline-none transition placeholder:text-signal-muted/70 focus:border-signal-cyan focus:ring-2 focus:ring-signal-cyan/15"
+  return "h-12 w-full rounded-lg border border-[#28404a] bg-[#0b141a]/80 px-12 text-[15px] text-[#eef4f5] outline-none transition placeholder:text-[#71808a] focus:border-[#00d8e6] focus:ring-2 focus:ring-[#00d8e6]/20 sm:px-[52px]"
 }
 
 function statusFromError(error: unknown): Status {
@@ -42,10 +43,10 @@ function StatusMessage({ status }: { status: Status }) {
   return (
     <p
       className={cn(
-        "rounded-md border px-3 py-2 text-sm",
+        "rounded-[10px] border px-4 py-3 text-sm",
         status.tone === "error" && "border-red-400/30 bg-red-500/10 text-red-200",
         status.tone === "success" && "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
-        status.tone === "neutral" && "border-signal-line bg-signal-surface text-signal-muted",
+        status.tone === "neutral" && "border-[#28404a] bg-[#0b141a] text-[#a9b5bf]",
       )}
     >
       {status.message}
@@ -73,11 +74,72 @@ function validateAuthForm(form: FormData, isSignup: boolean) {
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-signal-ink">
+    <label className="grid gap-2 text-sm font-semibold text-[#eef4f5]">
       {label}
       {children}
-      {error && <span className="text-xs font-medium text-red-600">{error}</span>}
+      {error && <span className="-mt-0.5 text-xs font-semibold leading-4 text-red-300">{error}</span>}
     </label>
+  )
+}
+
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" className="size-6" viewBox="0 0 24 24">
+      <path d="M21.6 12.23c0-.78-.07-1.53-.2-2.23H12v4.22h5.37a4.6 4.6 0 0 1-1.99 3.02v2.51h3.23c1.89-1.74 2.99-4.31 2.99-7.52Z" fill="#4285F4" />
+      <path d="M12 22c2.7 0 4.96-.89 6.61-2.42l-3.23-2.51c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.59A9.99 9.99 0 0 0 12 22Z" fill="#34A853" />
+      <path d="M6.41 13.91a6.02 6.02 0 0 1 0-3.82V7.5H3.07a10.01 10.01 0 0 0 0 9l3.34-2.59Z" fill="#FBBC05" />
+      <path d="M12 5.98c1.47 0 2.79.51 3.83 1.5l2.86-2.86A9.61 9.61 0 0 0 12 2 9.99 9.99 0 0 0 3.07 7.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z" fill="#EA4335" />
+    </svg>
+  )
+}
+
+function AuthArtworkOverlay({ isSignup }: { isSignup: boolean }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between bg-[linear-gradient(90deg,rgb(2_10_14/0.88)_0%,rgb(2_10_14/0.64)_38%,transparent_78%)] p-6 sm:p-8 lg:p-10 xl:p-11">
+      <div>
+        <Link className="pointer-events-auto inline-flex w-28 sm:w-32" href="/" aria-label="Relay home">
+          <BrandLogo priority />
+        </Link>
+
+        <div className="mt-8 max-w-[520px] sm:mt-11 lg:mt-12">
+          <div className="mb-4 flex w-fit items-center gap-2.5 rounded-full border border-[#00f5ff]/70 bg-[#001b22]/60 px-3.5 py-2 text-xs font-semibold text-[#00f5ff] shadow-[0_0_28px_rgb(0_245_255/0.12)] sm:text-sm">
+            <RadioTower className="size-4" aria-hidden="true" />
+            Realtime team messaging
+          </div>
+          <h2 className="max-w-[11ch] text-balance text-[clamp(2.4rem,4.8vw,3.8rem)] font-semibold leading-[0.98] tracking-[-0.035em] text-white drop-shadow-[0_5px_18px_rgb(0_0_0/0.55)]">
+            {isSignup ? "Start where your team works." : "Pick up where you left off."}
+          </h2>
+          <p className="mt-4 max-w-[470px] text-base font-medium leading-7 text-[#b8c4cf] drop-shadow-[0_3px_12px_rgb(0_0_0/0.7)] sm:text-lg">
+            {isSignup
+              ? "Create your account, invite your team, and keep every workspace conversation moving in Relay."
+              : "Continue to your conversations, channels, and team workspace in Relay."}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 border-t border-white/10 pt-5 text-[#c7d0d8] sm:grid-cols-3 lg:gap-5">
+        <div className="flex gap-4">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#ffa42e]/80 text-[#ffa42e] shadow-[0_0_22px_rgb(255_164_46/0.16)]">
+            <Hash className="size-5" aria-hidden="true" />
+          </span>
+          <p className="text-sm leading-5"><span className="block font-semibold text-white">Channels</span>Keep work organized across teams.</p>
+        </div>
+        <div className="flex gap-4 sm:border-l sm:border-white/10 sm:pl-5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#00f5ff]/75 text-[#00f5ff] shadow-[0_0_22px_rgb(0_245_255/0.12)]">
+            <UserRound className="size-5" aria-hidden="true" />
+          </span>
+          <p className="text-sm leading-5"><span className="block font-semibold text-white">Presence</span>See who&apos;s online and in the flow.</p>
+        </div>
+        <div className="flex gap-4 sm:border-l sm:border-white/10 sm:pl-5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#00f5ff]/75 text-[#00f5ff] shadow-[0_0_22px_rgb(0_245_255/0.12)]">
+            <Zap className="size-5" aria-hidden="true" />
+          </span>
+          <p className="text-sm leading-5"><span className="block font-semibold text-white">Realtime</span>Messages and updates happen instantly.</p>
+        </div>
+      </div>
+
+      <Bell className="absolute bottom-[35%] left-[52%] hidden size-12 text-[#ffa42e]/80 md:block" aria-hidden="true" />
+    </div>
   )
 }
 
@@ -127,92 +189,108 @@ export function AuthPage({ mode, nextPath = "/app" }: { mode: AuthMode; nextPath
   }
 
   return (
-    <main className="h-dvh overflow-y-auto bg-signal-carbon px-4 py-4 text-signal-panel-text md:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-full w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_440px]">
-        <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-signal-panel p-5 md:p-8">
-          <div className="absolute bottom-0 left-10 top-24 w-px bg-signal-amber/35" aria-hidden="true" />
-          <div className="relative flex h-full min-h-[520px] flex-col justify-between gap-10">
-            <div>
-              <Link className="inline-flex w-32" href="/" aria-label="Relay home">
-                <BrandLogo priority />
-              </Link>
-
-              <div className="mt-12 max-w-2xl">
-                <div className="mb-6 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-signal-cyan">
-                  {isSignup ? <ShieldCheck className="size-3.5" aria-hidden="true" /> : <RadioTower className="size-3.5" aria-hidden="true" />}
-                  {isSignup ? "New workspace access" : "Authenticated workspace entry"}
-                </div>
-                <h1 className="max-w-[11ch] text-5xl font-semibold leading-[0.94] tracking-[-0.035em] md:text-7xl">
-                  {isSignup ? "Start with the right access." : "Pick up the signal."}
-                </h1>
-                <p className="mt-6 max-w-xl text-base leading-7 text-signal-panel-muted">
-                  {isSignup
-                    ? "Create your account and continue directly into workspace setup to create a team space or accept an invitation."
-                    : "Log in to continue to workspace setup, channel navigation, direct messages, and the realtime Relay shell."}
-                </p>
-              </div>
-            </div>
-
-            <div className="relative ml-5 grid gap-3 border-t border-white/10 pt-5 text-sm text-signal-panel-muted md:grid-cols-3">
-              <p><span className="mb-2 flex size-7 items-center justify-center rounded-md bg-signal-amber text-signal-carbon"><LockKeyhole className="size-4" aria-hidden="true" /></span><span className="block font-semibold text-signal-panel-text">Session</span>HTTP cookies carry authenticated access.</p>
-              <p><span className="mb-2 flex size-7 items-center justify-center rounded-md border border-signal-cyan/40 text-signal-cyan"><ShieldCheck className="size-4" aria-hidden="true" /></span><span className="block font-semibold text-signal-panel-text">Membership</span>Workspace actions stay server-authorized.</p>
-              <p><span className="mb-2 flex size-7 items-center justify-center rounded-md border border-signal-cyan/40 text-signal-cyan"><RadioTower className="size-4" aria-hidden="true" /></span><span className="block font-semibold text-signal-panel-text">Realtime</span>Socket context follows signed-in users.</p>
-            </div>
-          </div>
+    <main className="h-dvh overflow-y-auto bg-[#050c10] px-3 py-3 text-[#eef4f5] sm:px-5 sm:py-5 lg:grid lg:place-items-center lg:p-4">
+      <div className="mx-auto grid min-h-full w-full max-w-[1320px] gap-4 lg:min-h-0 lg:grid-cols-[minmax(0,1.06fr)_minmax(380px,0.94fr)] xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]">
+        <section className="relative min-h-[410px] overflow-hidden rounded-2xl border border-[#25475d] bg-[#071116] shadow-[0_24px_80px_rgb(0_0_0/0.35)] sm:min-h-[500px] lg:h-[min(calc(100dvh-32px),720px)] lg:min-h-0">
+          <Image
+            alt="Relay realtime team messaging preview"
+            className="object-cover"
+            fill
+            priority
+            sizes="(max-width: 1024px) 100vw, 760px"
+            src="/auth-bg.png"
+          />
+          <AuthArtworkOverlay isSignup={isSignup} />
         </section>
 
-        <section className="grid content-center rounded-2xl border border-signal-line bg-signal-paper p-3 text-signal-ink shadow-2xl md:p-5">
-          <div className="rounded-xl border border-signal-line bg-signal-surface p-5 md:p-6">
-            <div className="flex items-start justify-between gap-5">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-[-0.02em]">{isSignup ? "Create account" : "Log in"}</h2>
-                <p className="mt-2 text-sm leading-6 text-signal-muted">
-                  {isSignup ? "Already have access?" : "Need an account?"} {" "}
-                  <Link className="font-semibold text-signal-cyan-ink underline" href={`${isSignup ? "/login" : "/signup"}?next=${encodeURIComponent(nextPath)}`}>
-                    {isSignup ? "Log in instead" : "Create one"}
-                  </Link>
-                </p>
-              </div>
-              <span className="block size-10"><BrandLogo mark="icon" /></span>
+        <section className="grid rounded-2xl border border-[#25475d] bg-[radial-gradient(circle_at_85%_8%,rgb(18_35_39/0.92),transparent_24%),linear-gradient(180deg,#071116_0%,#050b0f_100%)] px-5 py-7 shadow-[0_24px_80px_rgb(0_0_0/0.32)] sm:px-8 lg:h-[min(calc(100dvh-32px),720px)] lg:min-h-0 lg:content-center lg:px-9 xl:px-10">
+          <div className="mx-auto w-full max-w-[430px]">
+            <div>
+              <h1 className="text-balance text-[clamp(2.35rem,4.6vw,3.25rem)] font-semibold leading-none tracking-[-0.035em] text-white">
+                {isSignup ? "Create account" : "Welcome back"}
+              </h1>
+              <p className="mt-3 text-base font-medium leading-7 text-[#a9b5bf] sm:text-lg">
+                {isSignup ? "Sign up to start your Relay workspace." : "Log in to continue to your Relay workspace."}
+              </p>
             </div>
 
-            <form className="mt-5 grid gap-4" noValidate onSubmit={handleSubmit}>
-              {isSignup && <Field error={fieldErrors.name} label="Name"><input aria-invalid={Boolean(fieldErrors.name)} className={inputClass()} name="name" placeholder="Mina Chen" /></Field>}
-              <Field error={fieldErrors.email} label="Email"><input aria-invalid={Boolean(fieldErrors.email)} className={inputClass()} inputMode="email" name="email" placeholder="you@team.com" /></Field>
+            <form className={cn("grid", isSignup ? "mt-6 gap-3.5" : "mt-7 gap-4")} noValidate onSubmit={handleSubmit}>
+              {isSignup && (
+                <Field error={fieldErrors.name} label="Name">
+                  <div className="relative">
+                    <UserRound className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#9aaabd]" aria-hidden="true" />
+                    <input aria-invalid={Boolean(fieldErrors.name)} className={inputClass()} name="name" placeholder="Mina Chen" />
+                  </div>
+                </Field>
+              )}
+              <Field error={fieldErrors.email} label="Email">
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#9aaabd]" aria-hidden="true" />
+                  <input aria-invalid={Boolean(fieldErrors.email)} className={inputClass()} inputMode="email" name="email" placeholder="you@team.com" />
+                </div>
+              </Field>
               <Field error={fieldErrors.password} label="Password">
                 <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#9aaabd]" aria-hidden="true" />
                   <input
                     aria-invalid={Boolean(fieldErrors.password)}
-                    className={cn(inputClass(), "w-full pr-11")}
+                    className={cn(inputClass(), "pr-14")}
                     name="password"
                     placeholder={isSignup ? `At least ${PASSWORD_MIN_LENGTH} characters` : "Your password"}
                     type={showPassword ? "text" : "password"}
                   />
                   <button
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-signal-muted transition hover:bg-signal-surface-raised hover:text-signal-ink focus:outline-none focus:ring-2 focus:ring-signal-cyan/25"
+                    className="absolute right-3 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md text-[#9aaabd] transition hover:bg-white/5 hover:text-[#eef4f5] focus:outline-none focus:ring-2 focus:ring-[#00d8e6]/30"
                     onClick={() => setShowPassword((current) => !current)}
                     type="button"
                   >
-                    {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+                    {showPassword ? <EyeOff className="size-5" aria-hidden="true" /> : <Eye className="size-5" aria-hidden="true" />}
                   </button>
                 </div>
               </Field>
+
+              {!isSignup && (
+                <div className="-mt-4 flex justify-end text-sm font-semibold">
+                  <span className="text-[#00f5ff] underline decoration-[#00f5ff]/80 underline-offset-4" aria-disabled="true">
+                    Forgot password?
+                  </span>
+                </div>
+              )}
+
               <StatusMessage status={status} />
-              <Button className="mt-1 h-10" disabled={isSubmitting} type="submit">
-                {isSignup ? "Create account" : "Enter workspace"}
-                <ArrowRight className="size-4" aria-hidden="true" />
+              <Button
+                className="mt-1 h-12 rounded-lg bg-[#ffa42e] text-base font-bold text-[#071116] hover:bg-[#ffb64d] focus-visible:ring-[#ffa42e]/35"
+                disabled={isSubmitting}
+                type="submit"
+              >
+                {isSubmitting ? "Continuing..." : isSignup ? "Create Relay account" : "Continue to Relay"}
+                <ArrowRight className="ml-2 size-5" aria-hidden="true" />
               </Button>
             </form>
 
-            <div className="mt-6 rounded-lg border border-signal-line bg-signal-surface-raised p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-signal-cyan" aria-hidden="true" />What happens next</div>
-              <p className="mt-2 text-sm leading-6 text-signal-muted">
-                {isSignup
-                  ? "Successful signup routes you to workspace setup, where you can create a workspace or enter an existing one."
-                  : "Successful login routes you to workspace setup, where you can create a workspace or enter an existing one."}
-              </p>
+            <div className={cn("flex items-center gap-5 text-sm text-[#84919a]", isSignup ? "my-4" : "my-5")}>
+              <span className="h-px flex-1 bg-[#28404a]" />
+              <span>or continue with</span>
+              <span className="h-px flex-1 bg-[#28404a]" />
             </div>
+
+            <button
+              className="flex h-12 w-full items-center justify-center gap-5 rounded-lg border border-[#28404a] bg-[#0d1a21]/80 text-base font-semibold text-[#eef4f5] transition hover:border-[#3f5c68] hover:bg-[#13252e] focus:outline-none focus:ring-2 focus:ring-[#00d8e6]/25 disabled:cursor-not-allowed disabled:opacity-100"
+              disabled
+              title="Google sign-in is not configured yet."
+              type="button"
+            >
+              <GoogleMark />
+              Continue with Google
+            </button>
+
+            <p className={cn("text-center text-base text-[#a9b5bf]", isSignup ? "mt-5" : "mt-6")}>
+              {isSignup ? "Already have an account?" : "Need an account?"} {" "}
+              <Link className="font-semibold text-[#00f5ff] underline decoration-[#00f5ff]/80 underline-offset-4" href={`${isSignup ? "/login" : "/signup"}?next=${encodeURIComponent(nextPath)}`}>
+                {isSignup ? "Log in" : "Create one"}
+              </Link>
+            </p>
           </div>
         </section>
       </div>

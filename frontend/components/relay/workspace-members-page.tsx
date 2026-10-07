@@ -96,16 +96,15 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     }
   }
 
-  if (loading) return <div className="grid min-h-0 flex-1 place-items-center text-sm text-signal-muted" role="status">Loading members...</div>
+  if (loading) return <div className="grid min-h-72 place-items-center text-sm text-signal-muted" role="status">Loading members...</div>
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-7 sm:px-8">
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
       <div className="mx-auto max-w-4xl">
-        <header className="max-w-2xl"><h1 className="text-2xl font-semibold tracking-[-0.02em]">Members</h1><p className="mt-2 text-sm leading-6 text-signal-muted">People with access to {workspace?.name ?? "this workspace"}, and invitations waiting to be accepted.</p></header>
-        {error && <p className="mt-5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{error}</p>}
+        {error && <p className="mb-5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{error}</p>}
 
         {canInvite && (
-          <section className="mt-8 border-y border-signal-line py-6">
+          <section className="border-b border-signal-line pb-5">
             <div className="flex items-center gap-2"><MailPlus className="size-4 text-signal-cyan" /><h2 className="text-sm font-semibold">Invite a teammate</h2></div>
             <form className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]" onSubmit={invite}>
               <label className="sr-only" htmlFor="invite-email">Email address</label><input className={inputClass()} id="invite-email" name="email" placeholder="teammate@example.com" required type="email" />
@@ -118,7 +117,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
           </section>
         )}
 
-        <section className="mt-8">
+        <section className="mt-6">
           <h2 className="text-sm font-semibold">Active members <span className="ml-1 text-signal-muted">{members.length}</span></h2>
           <div className="mt-3 divide-y divide-signal-line border-y border-signal-line">
             {members.map((member) => (
@@ -128,7 +127,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
         </section>
 
         {canInvite && (
-          <section className="mt-8">
+          <section className="mt-6">
             <h2 className="text-sm font-semibold">Invitations</h2>
             {invitations.length === 0 ? <p className="mt-3 border-y border-signal-line py-5 text-sm text-signal-muted">No invitations have been created.</p> : (
               <div className="mt-3 divide-y divide-signal-line border-y border-signal-line">
