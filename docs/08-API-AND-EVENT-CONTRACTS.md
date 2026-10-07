@@ -37,6 +37,14 @@ Suggested resource groups:
 - GET `/workspaces/:id`
 - PATCH `/workspaces/:id`
 
+### Invitations
+- GET `/workspaces/invitations/:token` (public limited preview)
+- POST `/workspaces/:workspaceId/invitations`
+- DELETE `/workspaces/:workspaceId/invitations/:invitationId`
+- POST `/workspaces/invitations/accept`
+
+The public preview returns only workspace display name, masked invited email, assigned role, expiry, and lifecycle status. Raw tokens are stored only as hashes and are returned once when an invitation is created so the authorized sender can share the invitation link.
+
 ### Channels
 - POST `/workspaces/:workspaceId/channels`
 - GET `/workspaces/:workspaceId/channels`

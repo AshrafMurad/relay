@@ -54,6 +54,14 @@ export interface WorkspaceInvitationDTO {
   createdAt: string;
 }
 
+export interface WorkspaceInvitationPreviewDTO {
+  workspaceName: string;
+  emailHint: string;
+  role: "ADMIN" | "MEMBER";
+  status: "PENDING" | "EXPIRED" | "ACCEPTED" | "REVOKED";
+  expiresAt: string;
+}
+
 export interface ChannelDTO {
   id: string;
   workspaceId: string;

@@ -81,7 +81,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
   )
 }
 
-export function AuthPage({ mode }: { mode: AuthMode }) {
+export function AuthPage({ mode, nextPath = "/app" }: { mode: AuthMode; nextPath?: string }) {
   const router = useRouter()
   const [status, setStatus] = useState<Status>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -108,7 +108,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             password: values.password,
           }),
         })
-        router.replace("/workspace")
+        router.replace(nextPath)
         return
       }
 
@@ -116,7 +116,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         method: "POST",
         body: JSON.stringify({ email: values.email, password: values.password }),
       })
-      router.replace("/workspace")
+      router.replace(nextPath)
     } catch (error) {
       const apiFieldErrors = fieldErrorFromError(error)
       if (apiFieldErrors) setFieldErrors(apiFieldErrors)
@@ -168,7 +168,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <h2 className="text-2xl font-semibold tracking-[-0.02em]">{isSignup ? "Create account" : "Log in"}</h2>
                 <p className="mt-2 text-sm leading-6 text-signal-muted">
                   {isSignup ? "Already have access?" : "Need an account?"} {" "}
-                  <Link className="font-semibold text-signal-cyan-ink underline" href={isSignup ? "/login" : "/signup"}>
+                  <Link className="font-semibold text-signal-cyan-ink underline" href={`${isSignup ? "/login" : "/signup"}?next=${encodeURIComponent(nextPath)}`}>
                     {isSignup ? "Log in instead" : "Create one"}
                   </Link>
                 </p>

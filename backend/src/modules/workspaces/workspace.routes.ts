@@ -8,7 +8,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { createChannelSchema } from "../channels/channel.contracts.js";
 import { createChannel, listChannels } from "../channels/channel.service.js";
 import { getWorkspaceSync, syncQuerySchema } from "../sync/sync.service.js";
-import { acceptInvitation, createInvitation, createWorkspace, getWorkspace, listInvitations, listMembers, listWorkspaces } from "./workspace.service.js";
+import { acceptInvitation, createInvitation, createWorkspace, getInvitationPreview, getWorkspace, listInvitations, listMembers, listWorkspaces, revokeInvitation } from "./workspace.service.js";
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(2).max(120),
@@ -22,6 +22,8 @@ const createInvitationSchema = z.object({
 
 const acceptInvitationSchema = z.object({ token: z.string().min(16) });
 const paramsSchema = z.object({ workspaceId: z.string().uuid() });
+const invitationParamsSchema = z.object({ workspaceId: z.string().uuid(), invitationId: z.string().uuid() });
+const tokenParamsSchema = z.object({ token: z.string().min(16) });
 
 function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -31,6 +33,12 @@ function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
 
 export function createWorkspaceRouter(prisma: PrismaClient) {
   const router = Router();
+
+  router.get("/invitations/:token", asyncHandler(async (request, response) => {
+    const { token } = parse(tokenParamsSchema, request.params);
+    const invitation = await getInvitationPreview(prisma, token);
+    response.json({ invitation });
+  }));
 
   router.use(requireAuth);
 
@@ -88,6 +96,12 @@ export function createWorkspaceRouter(prisma: PrismaClient) {
     const input = parse(createInvitationSchema, request.body);
     const result = await createInvitation(prisma, workspaceId, request.authUser!.id, input);
     response.status(201).json(result);
+  }));
+
+  router.delete("/:workspaceId/invitations/:invitationId", asyncHandler(async (request, response) => {
+    const { workspaceId, invitationId } = parse(invitationParamsSchema, request.params);
+    const invitation = await revokeInvitation(prisma, workspaceId, invitationId, request.authUser!.id);
+    response.json({ invitation });
   }));
 
   router.post("/invitations/accept", asyncHandler(async (request, response) => {

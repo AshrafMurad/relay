@@ -66,6 +66,8 @@ Suggested route structure:
 
 Exact route naming may change during implementation.
 
+`/app` is the authenticated workspace gateway. It enters a valid last-used or sole workspace directly, shows a chooser when needed, and presents create-or-join onboarding only when the user has no active memberships. Invitation links retain priority through sign-in or sign-up and continue to acceptance before workspace entry.
+
 ## 4. Channel Navigation
 
 The user should be able to:

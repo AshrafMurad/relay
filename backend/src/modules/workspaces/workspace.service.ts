@@ -38,6 +38,14 @@ export interface WorkspaceInvitationDTO {
   createdAt: string;
 }
 
+export interface WorkspaceInvitationPreviewDTO {
+  workspaceName: string;
+  emailHint: string;
+  role: Exclude<WorkspaceRole, "OWNER">;
+  status: "PENDING" | "EXPIRED" | "ACCEPTED" | "REVOKED";
+  expiresAt: string;
+}
+
 export function normalizeInvitationEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -48,6 +56,19 @@ function hashToken(token: string) {
 
 function createToken() {
   return randomBytes(32).toString("base64url");
+}
+
+function invitationStatus(invitation: { acceptedAt: Date | null; revokedAt: Date | null; expiresAt: Date }): WorkspaceInvitationPreviewDTO["status"] {
+  if (invitation.acceptedAt) return "ACCEPTED";
+  if (invitation.revokedAt) return "REVOKED";
+  if (invitation.expiresAt <= new Date()) return "EXPIRED";
+  return "PENDING";
+}
+
+function maskEmail(email: string) {
+  const [local = "", domain = ""] = email.split("@");
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"*".repeat(Math.max(1, local.length - visible.length))}@${domain}`;
 }
 
 function slugify(name: string) {
@@ -185,6 +206,19 @@ export async function createInvitation(
   const actor = await requireWorkspaceMember(prisma, workspaceId, actorId);
   assertCanInvite(actor.role, input.role);
   const email = normalizeInvitationEmail(input.email);
+  const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (existingUser) {
+    const existingMember = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId: existingUser.id } },
+      select: { status: true },
+    });
+    if (existingMember?.status === "ACTIVE") throw new ApiError(409, "ALREADY_MEMBER", "This person is already a workspace member.");
+  }
+  const pendingInvitation = await prisma.workspaceInvitation.findFirst({
+    where: { workspaceId, email, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  if (pendingInvitation) throw new ApiError(409, "INVITATION_PENDING", "A pending invitation already exists for this email address.");
   const token = createToken();
   const invitation = await prisma.workspaceInvitation.create({
     data: {
@@ -199,6 +233,21 @@ export async function createInvitation(
   return { invitation: toInvitationDTO(invitation), token };
 }
 
+export async function getInvitationPreview(prisma: PrismaClient, token: string): Promise<WorkspaceInvitationPreviewDTO> {
+  const invitation = await prisma.workspaceInvitation.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { workspace: { select: { name: true } } },
+  });
+  if (!invitation) throw new ApiError(404, "INVITATION_INVALID", "Invitation was not found.");
+  return {
+    workspaceName: invitation.workspace.name,
+    emailHint: maskEmail(invitation.email),
+    role: invitation.role as Exclude<WorkspaceRole, "OWNER">,
+    status: invitationStatus(invitation),
+    expiresAt: invitation.expiresAt.toISOString(),
+  };
+}
+
 export async function listInvitations(prisma: PrismaClient, workspaceId: string, actorId: string) {
   const actor = await requireWorkspaceMember(prisma, workspaceId, actorId);
   if (actor.role === "MEMBER") throw new ApiError(403, "FORBIDDEN", "You do not have permission to view invitations.");
@@ -207,6 +256,23 @@ export async function listInvitations(prisma: PrismaClient, workspaceId: string,
     orderBy: { createdAt: "desc" },
   });
   return invitations.map(toInvitationDTO);
+}
+
+export async function revokeInvitation(prisma: PrismaClient, workspaceId: string, invitationId: string, actorId: string) {
+  const actor = await requireWorkspaceMember(prisma, workspaceId, actorId);
+  const invitation = await prisma.workspaceInvitation.findFirst({ where: { id: invitationId, workspaceId } });
+  if (!invitation) throw new ApiError(404, "INVITATION_INVALID", "Invitation was not found.");
+  if (actor.role === "MEMBER" || (actor.role === "ADMIN" && invitation.role !== "MEMBER")) {
+    throw new ApiError(403, "FORBIDDEN", "You do not have permission to revoke this invitation.");
+  }
+  if (invitation.acceptedAt) throw new ApiError(409, "INVITATION_ALREADY_USED", "Invitation has already been accepted.");
+  if (invitation.revokedAt) throw new ApiError(409, "INVITATION_INVALID", "Invitation has already been revoked.");
+
+  const revoked = await prisma.workspaceInvitation.update({
+    where: { id: invitation.id },
+    data: { revokedAt: new Date() },
+  });
+  return toInvitationDTO(revoked);
 }
 
 export async function acceptInvitation(prisma: PrismaClient, token: string, user: User) {
@@ -221,16 +287,29 @@ export async function acceptInvitation(prisma: PrismaClient, token: string, user
       throw new ApiError(403, "FORBIDDEN", "Sign in with the invited email address to accept this invitation.");
     }
 
-    await transaction.workspaceMember.upsert({
-      where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId: user.id } },
-      create: { workspaceId: invitation.workspaceId, userId: user.id, role: invitation.role },
-      update: { role: invitation.role, status: "ACTIVE", removedAt: null, removedById: null },
-    });
-    const accepted = await transaction.workspaceInvitation.update({
-      where: { id: invitation.id, acceptedAt: null, revokedAt: null },
+    const acceptance = await transaction.workspaceInvitation.updateMany({
+      where: { id: invitation.id, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
       data: { acceptedAt: new Date(), acceptedById: user.id },
     });
+    if (acceptance.count !== 1) throw new ApiError(409, "INVITATION_ALREADY_USED", "Invitation is no longer available.");
+
+    const existingMember = await transaction.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId: user.id } },
+    });
+    const role = existingMember?.status === "ACTIVE" ? existingMember.role : invitation.role;
+    if (!existingMember) {
+      await transaction.workspaceMember.create({
+        data: { workspaceId: invitation.workspaceId, userId: user.id, role: invitation.role },
+      });
+    } else if (existingMember.status === "REMOVED") {
+      await transaction.workspaceMember.update({
+        where: { id: existingMember.id },
+        data: { role: invitation.role, status: "ACTIVE", removedAt: null, removedById: null },
+      });
+    }
+
+    const accepted = await transaction.workspaceInvitation.findUniqueOrThrow({ where: { id: invitation.id } });
     const workspace = await transaction.workspace.findUniqueOrThrow({ where: { id: invitation.workspaceId } });
-    return { invitation: toInvitationDTO(accepted), workspace: toWorkspaceDTO(workspace, invitation.role) };
+    return { invitation: toInvitationDTO(accepted), workspace: toWorkspaceDTO(workspace, role) };
   });
 }

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
 
+import { RelayAppShell } from "@/components/relay/app-shell"
+
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {
-  return children
+  return <RelayAppShell>{children}</RelayAppShell>
 }

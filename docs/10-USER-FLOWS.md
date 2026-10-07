@@ -1,19 +1,19 @@
 # Relay — User Flows
 
-## 1. New User → New Workspace
+## 1. Authenticated Workspace Entry
 
 ```text
 Landing
-→ Sign Up
-→ Profile Setup
-→ Create Workspace
-→ Workspace Created
-→ Default Channel
-→ Invite Team Members
-→ Enter Workspace
+→ Sign Up / Sign In
+→ Verify Email When Required
+→ Invitation Pending? Continue Invitation
+→ Otherwise Load Active Memberships
+→ Enter Last-Used or Sole Workspace
+→ Or Choose Workspace
+→ Or, With No Memberships, Create or Join
 ```
 
-Email/password registration inserts an email-verification step before profile/workspace access. Google OAuth returns directly to the profile/workspace decision after the verified provider callback. A verified Google account and verified credential account with the same email resolve to one Relay user.
+Creating a workspace atomically creates the Owner membership and default `general` channel, then enters the workspace directly. Joining requires an invitation link. Email/password registration inserts an email-verification step before profile/workspace access. Google OAuth returns directly to the pending-invitation or workspace decision after the verified provider callback. A verified Google account and verified credential account with the same email resolve to one Relay user.
 
 ## 2. Invitation Flow
 
@@ -26,7 +26,7 @@ Invitation Link
 → Enter Workspace
 ```
 
-Invalid, expired, revoked, or already-used invitations should have explicit states.
+The invitation destination is preserved through authentication. Invalid, expired, revoked, already-used, and wrong-account invitations have explicit states. An existing active membership keeps its current role; only a removed membership is reactivated with the invitation role.
 
 ## 3. Create Channel
 

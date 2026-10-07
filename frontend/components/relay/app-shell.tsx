@@ -16,6 +16,7 @@ import {
   Search,
   SunMoon,
   UserRound,
+  UsersRound,
 } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -126,11 +127,12 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
         setChannels(availableChannels)
         setMembers(workspaceMembers)
         setDirectConversations(conversations)
+        window.localStorage.setItem("relay:last-workspace", currentWorkspace.slug)
         setState("ready")
       } catch (caught) {
         if (cancelled) return
         if (caught instanceof ApiClientError && caught.code === "UNAUTHORIZED") {
-          startTransition(() => router.replace("/"))
+          startTransition(() => router.replace("/login"))
           return
         }
         setError(caught instanceof Error ? caught.message : "Workspace could not be loaded.")
@@ -143,7 +145,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   }, [router, workspaceSlug])
 
   useEffect(() => {
-    if (state !== "ready" || channelId || conversationId || pathname.endsWith("/search") || !workspace || channels.length === 0) return
+    if (state !== "ready" || channelId || conversationId || pathname.endsWith("/search") || pathname.endsWith("/members") || !workspace || channels.length === 0) return
     const first = channels.find((channel) => !channel.archivedAt) ?? channels[0]
     startTransition(() => router.replace(`/app/${workspace.slug}/channels/${first.id}`))
   }, [channelId, conversationId, channels, pathname, router, state, workspace])
@@ -247,7 +249,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await apiRequest<void>("/auth/signout", { method: "POST" })
-    startTransition(() => router.replace("/"))
+    startTransition(() => router.replace("/login"))
   }
 
   function toggleTheme() {
@@ -285,6 +287,8 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
               {workspaces.map((item) => (
                 <DropdownMenuItem key={item.id} onClick={() => setNavigationOpen(false)} render={<Link href={`/app/${item.slug}`} />}>{item.name}</DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setNavigationOpen(false)} render={<Link href="/app?choose=1" />}>All workspaces</DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -292,6 +296,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
 
       <ScrollArea className={cn("min-h-0 flex-1", isSwitchingWorkspace && "pointer-events-none opacity-55")}>
         <div className="p-3">
+          <Link className={cn("mb-1 flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", pathname.endsWith("/members") ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text")} href={`/app/${workspace.slug}/members`} onClick={() => setNavigationOpen(false)}>
+            <UsersRound className="size-3.5" /> Members
+          </Link>
           <Link className={cn("mb-2 flex min-h-8 items-center gap-2 rounded-md px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", pathname.endsWith("/search") ? "bg-signal-amber/12 font-semibold text-signal-amber" : "text-signal-panel-muted hover:bg-white/5 hover:text-signal-panel-text")} href={`/app/${workspace.slug}/search`} onClick={() => setNavigationOpen(false)}>
             <Search className="size-3.5" /> Search messages
           </Link>

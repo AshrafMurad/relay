@@ -1,5 +1,5 @@
-import { SprintOneApp } from "@/components/relay/sprint-one-app"
+import { redirect } from "next/navigation"
 
 export default function WorkspaceSetupPage() {
-  return <SprintOneApp />
+  redirect("/app")
 }

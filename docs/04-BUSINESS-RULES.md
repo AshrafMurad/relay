@@ -43,6 +43,9 @@
 - Invitations expire after 7 days.
 - Owners may invite Admins or Members; Admins may invite Members only.
 - Owners may revoke any pending invitation; Admins may revoke any pending Member-role invitation.
+- An active workspace member cannot receive a new invitation to the same workspace.
+- Accepting an older invitation for an existing active member consumes the invitation without changing the member's current role.
+- Only a removed membership is reactivated with the accepted invitation's role.
 
 ## 4. Channels
 
