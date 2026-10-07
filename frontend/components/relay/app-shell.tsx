@@ -61,12 +61,12 @@ function initials(value: string) {
 }
 
 const navigationItemVariants = cva(
-  "relative flex min-h-8 items-center gap-2 rounded-md px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber",
+  "relative flex h-8 items-center gap-2 rounded-md px-2 text-xs transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber",
   {
     variants: {
       active: {
         true: "bg-signal-amber/12 font-semibold text-signal-amber",
-        false: "text-signal-panel-muted hover:bg-sidebar-accent hover:text-signal-panel-text",
+        false: "text-signal-panel-muted hover:bg-sidebar-accent/80 hover:text-signal-panel-text",
       },
     },
     defaultVariants: { active: false },
@@ -105,20 +105,20 @@ function ChannelDetails({ channel, currentUserId, members, onlineUserIds }: { ch
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-6 p-4">
+        <div className="space-y-5 p-4">
           <section>
             <div className="flex items-center gap-2">
               <span className="grid size-8 place-items-center rounded-md border border-sidebar-border bg-signal-carbon text-signal-amber"><Hash className="size-4" /></span>
               <div className="min-w-0">
                 <h3 className="text-xs font-semibold">About</h3>
                 <p className="text-helper mt-0.5 truncate text-signal-panel-muted">#{channel.name}</p>
-                <p className="text-metadata mt-0.5 uppercase tracking-[0.12em] text-signal-panel-muted">Public channel</p>
               </div>
             </div>
-            <p className="text-helper mt-3 leading-5 text-signal-panel-muted">{channel.description || "No description has been added yet."}</p>
+            <p className="mt-3 text-xs leading-5 text-signal-panel-text/90">{channel.description || "No description has been added yet."}</p>
+            <p className="text-metadata mt-2 uppercase tracking-[0.1em] text-signal-panel-muted">Public channel</p>
           </section>
 
-          <section className="border-t border-sidebar-border pt-5">
+          <section className="border-t border-sidebar-border pt-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold">Members</h3>
               <span className="text-metadata text-signal-panel-muted">{members.length}</span>
@@ -128,11 +128,11 @@ function ChannelDetails({ channel, currentUserId, members, onlineUserIds }: { ch
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-signal-panel-muted" />
               <Input className="h-8 border-sidebar-border bg-signal-carbon pl-8 text-xs text-signal-panel-text placeholder:text-signal-panel-muted focus-visible:ring-signal-cyan/20" onChange={(event) => setQuery(event.target.value)} placeholder="Find a member" value={query} />
             </label>
-            <div className="mt-3 space-y-1">
+            <div className="mt-2 space-y-0.5">
               {visibleMembers.map((member) => {
                 const online = member.userId === currentUserId || onlineUserIds.has(member.userId)
                 return (
-                  <div className="flex items-center gap-2.5 rounded-md px-1.5 py-2 transition-colors hover:bg-sidebar-accent" key={member.id}>
+                  <div className="flex min-h-10 items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors duration-150 hover:bg-sidebar-accent/80" key={member.id}>
                     <span className="relative shrink-0">
                       <Avatar className="size-7 rounded-md">
                         {member.image && <AvatarImage alt="" className="rounded-md" src={member.image} />}
@@ -142,7 +142,8 @@ function ChannelDetails({ channel, currentUserId, members, onlineUserIds }: { ch
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{member.name}{member.userId === currentUserId && <span className="font-normal text-signal-panel-muted"> (you)</span>}</p>
-                      <p className="text-metadata mt-0.5 capitalize text-signal-panel-muted">{online ? "Online" : member.role.toLowerCase()}</p>
+                      <p className="text-metadata mt-0.5 capitalize text-signal-panel-muted">{member.role.toLowerCase()}</p>
+                      <span className="sr-only">{online ? "Online" : "Offline"}</span>
                     </div>
                   </div>
                 )
@@ -375,10 +376,10 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     <div className="theme-navigation flex h-full min-h-0 flex-col bg-signal-panel">
       <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button className="h-11 min-w-0 flex-1 justify-start px-2 text-signal-panel-text hover:bg-sidebar-accent" variant="ghost" />}>
-            <span className="text-metadata grid size-7 shrink-0 place-items-center rounded-md border border-sidebar-border bg-signal-carbon font-bold text-signal-amber">{initials(targetWorkspace?.name ?? workspace.name)}</span>
-            <span className="min-w-0 text-left"><span className="block truncate text-xs font-semibold">{targetWorkspace?.name ?? workspace.name}</span><span className="text-helper block truncate text-signal-panel-muted">{workspace.currentUserRole.toLowerCase()} workspace</span></span>
-            <ChevronDown className="ml-auto size-3" />
+          <DropdownMenuTrigger render={<Button className="h-11 min-w-0 flex-1 justify-start px-2 text-signal-panel-text hover:bg-sidebar-accent/80" variant="ghost" />}>
+            <span className="text-metadata grid size-8 shrink-0 place-items-center rounded-md border border-sidebar-border bg-signal-carbon font-bold text-signal-amber">{initials(targetWorkspace?.name ?? workspace.name)}</span>
+            <span className="min-w-0 text-left"><span className="block truncate text-[13px] font-semibold leading-4">{targetWorkspace?.name ?? workspace.name}</span><span className="text-helper block truncate text-signal-panel-muted">{workspace.currentUserRole.toLowerCase()} workspace</span></span>
+            <ChevronDown className="ml-auto size-3.5 text-signal-panel-muted" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-60">
             <DropdownMenuGroup>
@@ -393,7 +394,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
         </DropdownMenu>
       </div>
 
-      <ScrollArea className={cn("min-h-0 flex-1", isSwitchingWorkspace && "pointer-events-none opacity-55")}>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", isSwitchingWorkspace && "pointer-events-none opacity-55")}>
         <div className="p-3">
           <div className="mb-3 border-b border-sidebar-border pb-3">
           <Link aria-current={pathname.endsWith("/members") ? "page" : undefined} className={cn("mb-1", navigationItemVariants({ active: pathname.endsWith("/members") }))} href={`/app/${workspace.slug}/members`} onClick={() => setNavigationOpen(false)}>
@@ -403,7 +404,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
             <Search className="size-3.5" /> Search messages
           </Link>
           </div>
-          <div className="flex h-9 items-center justify-between px-2">
+          <div className="flex h-9 items-end justify-between px-2 pb-1">
             <div>
               <p className="text-helper font-semibold uppercase tracking-[0.12em] text-signal-panel-muted">Channels <span className="text-metadata ml-1 font-normal">{channels.length}</span></p>
               <p className="sr-only">{mayManage ? "You can manage channels." : "Only owners and admins can manage channels."}</p>
@@ -438,7 +439,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
               {mayManage ? "No channels yet. Create one to start the workspace." : "No channels are available. Ask an Owner or Admin to create one."}
             </div>
           )}
-          <div className="mt-5 flex h-9 items-center justify-between px-2">
+          <div className="mt-4 flex h-9 items-end justify-between px-2 pb-1">
             <p className="text-helper font-semibold uppercase tracking-[0.12em] text-signal-panel-muted">Direct Messages <span className="text-metadata ml-1 font-normal">{directConversations.length}</span></p>
           </div>
           <nav aria-label="Direct messages" className="mt-1 space-y-0.5">
@@ -455,31 +456,34 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
                   onClick={() => setNavigationOpen(false)}
                 >
                   {active && <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-signal-amber" />}
-                  <Avatar className="size-5 rounded-md"><AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(conversation.otherUser.name)}</AvatarFallback></Avatar>
-                  <span className="truncate">{conversation.otherUser.name}</span>
+                  <span className="relative shrink-0">
+                    <Avatar className="size-5 rounded-md">{conversation.otherUser.image && <AvatarImage alt="" className="rounded-md" src={conversation.otherUser.image} />}<AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(conversation.otherUser.name)}</AvatarFallback></Avatar>
+                    <span aria-label={onlineUserIds.has(conversation.otherUser.id) ? "Online" : "Offline"} className={cn("absolute -bottom-px -right-px size-2 rounded-full border border-signal-panel", onlineUserIds.has(conversation.otherUser.id) ? "bg-signal-cyan" : "bg-signal-panel-muted/50")} role="img" />
+                  </span>
+                  <span className={cn("truncate", conversation.unreadCount > 0 && !active && "font-semibold text-signal-panel-text")}>{conversation.otherUser.name}</span>
                   {conversation.unreadCount > 0 && <span className="text-metadata ml-auto rounded-full bg-signal-amber px-1.5 py-0.5 font-bold text-signal-carbon">{conversation.unreadCount}</span>}
                 </Link>
               )
             })}
             {members.filter((member) => member.userId !== user.id && !directConversations.some((conversation) => conversation.otherUser.id === member.userId)).map((member) => (
               <button
-                className={cn(navigationItemVariants(), "min-h-9 w-full text-left sm:min-h-8")}
+                className={cn(navigationItemVariants(), "w-full text-left")}
                 key={member.userId}
                 onClick={() => void openDirectMessage(member.userId)}
                 type="button"
               >
-                <Avatar className="size-5 rounded-md"><AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(member.name)}</AvatarFallback></Avatar>
+                <span className="relative shrink-0"><Avatar className="size-5 rounded-md">{member.image && <AvatarImage alt="" className="rounded-md" src={member.image} />}<AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(member.name)}</AvatarFallback></Avatar><span aria-label={onlineUserIds.has(member.userId) ? "Online" : "Offline"} className={cn("absolute -bottom-px -right-px size-2 rounded-full border border-signal-panel", onlineUserIds.has(member.userId) ? "bg-signal-cyan" : "bg-signal-panel-muted/50")} role="img" /></span>
                 <span className="truncate">{member.name}</span>
               </button>
             ))}
           </nav>
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="border-t border-sidebar-border p-2.5">
-        <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5">
+      <div className="shrink-0 border-t border-sidebar-border bg-signal-panel p-2.5">
+        <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors hover:bg-sidebar-accent/50">
           <span className="relative shrink-0"><Avatar className="size-8 rounded-lg">{user.image && <AvatarImage alt="" className="rounded-lg" src={user.image} />}<AvatarFallback className="text-metadata rounded-lg bg-signal-amber font-bold text-signal-carbon">{initials(user.name)}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-signal-panel bg-signal-cyan" /></span>
-          <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-signal-panel-text">{user.name}</p><p className="text-metadata mt-0.5 truncate text-signal-panel-muted">Online · {user.email}</p></div>
+          <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-signal-panel-text">{user.name}</p><p className="text-metadata mt-0.5 truncate text-signal-panel-muted" title={user.email}>{user.email}</p></div>
         </div>
         <div className="mt-1 grid grid-cols-2 gap-1">
           <ThemeControl className="justify-start text-signal-panel-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" showLabel />
@@ -491,13 +495,14 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
 
   return (
     <TooltipProvider>
-      <div className={cn("grid h-dvh overflow-hidden bg-signal-paper text-signal-ink md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[64px_260px_minmax(0,1fr)]", selectedChannel && "xl:grid-cols-[64px_260px_minmax(0,1fr)_292px]")}>
-        <aside className="theme-navigation hidden h-dvh flex-col items-center border-r border-sidebar-border bg-signal-carbon py-3 md:flex">
-          <div className="mb-4 size-8"><BrandLogo mark="icon" priority /><span className="sr-only">Relay</span></div>
-          <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2">
+      <div className={cn("fixed inset-0 grid min-h-0 overflow-hidden bg-signal-paper text-signal-ink md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[64px_260px_minmax(0,1fr)]", selectedChannel && "xl:grid-cols-[64px_260px_minmax(0,1fr)_292px]")}>
+        <aside className="theme-navigation hidden h-full min-h-0 flex-col items-center border-r border-sidebar-border bg-signal-carbon py-3 md:flex">
+          <div className="mb-3 size-8"><BrandLogo mark="icon" priority /><span className="sr-only">Relay</span></div>
+          <span className="mb-3 h-px w-7 bg-sidebar-border" aria-hidden="true" />
+          <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2.5">
             {workspaces.map((item) => (
               <Tooltip key={item.id}>
-                <TooltipTrigger render={<Link aria-current={item.slug === workspaceSlug ? "page" : undefined} className={cn("text-metadata relative grid size-10 place-items-center rounded-lg border font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", item.slug === workspaceSlug ? "border-signal-amber bg-sidebar-accent text-signal-panel-text" : "border-sidebar-border text-signal-panel-muted hover:border-signal-panel-muted")} href={`/app/${item.slug}`} />}>
+                <TooltipTrigger render={<Link aria-current={item.slug === workspaceSlug ? "page" : undefined} className={cn("text-metadata relative grid size-10 place-items-center rounded-lg border font-bold transition-[background-color,border-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", item.slug === workspaceSlug ? "border-signal-amber/70 bg-signal-amber/10 text-signal-amber" : "border-sidebar-border text-signal-panel-muted hover:border-signal-panel-muted hover:bg-sidebar-accent hover:text-signal-panel-text")} href={`/app/${item.slug}`} />}>
                   {item.slug === workspaceSlug && <span className="absolute inset-y-2 -left-[13px] w-0.5 rounded-r bg-signal-amber" />}
                   {initials(item.name)}
                 </TooltipTrigger>
@@ -511,10 +516,10 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           </Tooltip>
         </aside>
 
-        <aside className="hidden min-w-0 border-r border-signal-line lg:block">{navigation}</aside>
+        <aside className="hidden h-full min-h-0 min-w-0 overflow-hidden border-r border-signal-line lg:block">{navigation}</aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col">
-          <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-signal-line bg-signal-paper/95 px-3 sm:px-5">
+        <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <header className="flex h-[60px] shrink-0 items-center gap-2.5 border-b border-signal-line bg-signal-paper/95 px-3 sm:px-5">
             <Sheet onOpenChange={setNavigationOpen} open={navigationOpen}>
               <SheetTrigger render={<Button aria-label="Open navigation" className="lg:hidden" size="icon" type="button" variant="ghost" />}><Menu /></SheetTrigger>
               <SheetContent className="theme-navigation w-[min(88vw,320px)] gap-0 border-sidebar-border bg-signal-panel p-0" side="left">
@@ -522,9 +527,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
                 {navigation}
               </SheetContent>
             </Sheet>
-            <span className="grid size-8 shrink-0 place-items-center rounded-md border border-signal-line bg-signal-surface text-signal-muted">{selectedDirectConversation ? <UserRound className="size-4" /> : <Hash className="size-4" />}</span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-signal-surface-raised/70 text-signal-muted">{selectedDirectConversation ? <UserRound className="size-4" /> : <Hash className="size-4" />}</span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-sm font-semibold tracking-[-0.01em]">{selectedDirectConversation?.otherUser.name ?? selectedChannel?.name ?? workspace.name}</h1>
+              <h1 className="truncate text-sm font-semibold leading-4 tracking-[-0.01em]">{selectedDirectConversation?.otherUser.name ?? selectedChannel?.name ?? workspace.name}</h1>
               <p className="text-helper truncate text-signal-muted">{selectedDirectConversation ? selectedDirectConversation.otherUser.email : selectedChannel?.description || (selectedChannel ? "No channel description" : "Choose a channel or direct message from the workspace navigation")}</p>
             </div>
             {selectedChannel && <div className="hidden items-center -space-x-1.5 sm:flex" aria-label={`${members.length} workspace members`}>{members.slice(0, 3).map((member) => <Avatar className="size-6 rounded-md border-2 border-signal-paper" key={member.id}>{member.image && <AvatarImage alt="" className="rounded-sm" src={member.image} />}<AvatarFallback className="rounded-sm bg-signal-surface-raised text-[8px] font-semibold text-signal-muted">{initials(member.name)}</AvatarFallback></Avatar>)}{members.length > 3 && <span className="text-metadata grid size-6 place-items-center rounded-md border-2 border-signal-paper bg-signal-surface-raised text-signal-muted">+{members.length - 3}</span>}</div>}
@@ -579,7 +584,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           )}
         </main>
 
-        {selectedChannel && <aside className="hidden min-w-0 border-l border-signal-line xl:block"><ChannelDetails channel={selectedChannel} currentUserId={user.id} members={members} onlineUserIds={onlineUserIds} /></aside>}
+        {selectedChannel && <aside className="hidden h-full min-h-0 min-w-0 overflow-hidden border-l border-signal-line xl:block"><ChannelDetails channel={selectedChannel} currentUserId={user.id} members={members} onlineUserIds={onlineUserIds} /></aside>}
 
         {selectedChannel && <Sheet onOpenChange={setDetailsOpen} open={detailsOpen}><SheetContent className="theme-navigation w-[min(92vw,340px)] gap-0 border-sidebar-border bg-signal-panel p-0" side="right"><SheetHeader className="sr-only"><SheetTitle>Channel details</SheetTitle><SheetDescription>Information and members for #{selectedChannel.name}.</SheetDescription></SheetHeader><ChannelDetails channel={selectedChannel} currentUserId={user.id} members={members} onlineUserIds={onlineUserIds} /></SheetContent></Sheet>}
 

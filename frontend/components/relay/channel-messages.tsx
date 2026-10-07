@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import { AlertCircle, AtSign, CornerUpLeft, MessageSquareText, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, Smile, SmilePlus, Trash2, UserPlus, X } from "lucide-react"
+import { AlertCircle, AtSign, CornerUpLeft, FileText, MessageSquareText, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, Smile, SmilePlus, Trash2, UserPlus, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -36,6 +36,7 @@ const TYPING_REFRESH_MS = 3_000
 const QUICK_REACTIONS = ["👍", "✅", "👀", "❤️"]
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
+const dateFormatter = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" })
 
 function initials(value: string) {
   return value.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
@@ -113,14 +114,14 @@ function MessageRow({
   }
 
   return (
-    <article className={cn("group relative flex gap-3 px-4 transition-colors hover:bg-signal-surface/55 focus-within:bg-signal-surface/55 sm:px-7", grouped ? "py-1" : "pb-1.5 pt-3", message.delivery === "failed" && "bg-destructive/5")}>
-      {grouped ? <time className="text-metadata mt-1.5 w-8 shrink-0 text-center text-signal-muted opacity-0 transition-opacity group-hover:opacity-100" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time> : <Avatar className="mt-0.5 size-8 rounded-lg">
+    <article className={cn("group relative flex gap-3 px-4 transition-colors duration-150 hover:bg-signal-surface/55 focus-within:bg-signal-surface/55 sm:px-7", grouped ? "py-0.5" : "pb-1.5 pt-3.5", message.delivery === "failed" && "bg-destructive/5")}>
+      {grouped ? <time className="text-metadata mt-1.5 w-8 shrink-0 text-center text-signal-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time> : <Avatar className="mt-0.5 size-8 rounded-lg">
         {message.author.image && <AvatarImage alt="" className="rounded-lg" src={message.author.image} />}
         <AvatarFallback className="text-metadata rounded-lg bg-signal-surface-raised font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
       </Avatar>}
       <div className="min-w-0 flex-1">
         {!grouped && <div className="flex min-w-0 items-baseline gap-2 pr-8">
-          <span className="truncate text-xs font-semibold">{message.author.name}</span>
+          <span className="truncate text-[13px] font-semibold leading-5">{message.author.name}</span>
           <time className="text-metadata shrink-0 text-signal-muted" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time>
           {message.editedAt && !message.deletedAt && <span className="text-metadata text-signal-muted">edited</span>}
           {deliveryLabel && <span className={cn("text-metadata rounded-full border px-1.5 py-0.5", message.delivery === "failed" ? "border-destructive/30 text-destructive" : "border-signal-cyan/30 text-signal-cyan-ink")}>{deliveryLabel}</span>}
@@ -143,10 +144,9 @@ function MessageRow({
         {message.attachments.length > 0 && !message.deletedAt && (
           <div className="mt-2 flex max-w-[72ch] flex-wrap gap-2">
             {message.attachments.map((attachment) => (
-              <a className="text-helper inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-surface px-2.5 py-1.5 hover:border-signal-cyan" href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id} rel="noreferrer" target="_blank">
-                <Paperclip className="size-3" />
-                <span className="max-w-48 truncate">{attachment.originalFilename}</span>
-                <span className="text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span>
+              <a className="group/file inline-flex min-h-12 min-w-0 max-w-[32rem] items-center gap-2.5 rounded-md border border-signal-line bg-signal-surface px-3 py-2 transition-colors duration-150 hover:border-signal-muted hover:bg-signal-surface-raised/50 focus-visible:border-signal-cyan" href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id} rel="noreferrer" target="_blank">
+                <span className="grid size-8 shrink-0 place-items-center rounded-md bg-signal-surface-raised text-signal-muted"><FileText className="size-4" /></span>
+                <span className="min-w-0"><span className="block truncate text-xs font-semibold text-signal-ink group-hover/file:underline">{attachment.originalFilename}</span><span className="text-metadata mt-0.5 block text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span></span>
               </a>
             ))}
           </div>
@@ -159,27 +159,29 @@ function MessageRow({
           </div>
         )}
         {message.reactions.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Message reactions">
+          <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Message reactions">
             {message.reactions.map((reaction) => (
               <button
+                aria-label={`${reaction.reactedByMe ? "Remove" : "Add"} ${reaction.emoji} reaction, ${reaction.count} ${reaction.count === 1 ? "reaction" : "reactions"}`}
                 aria-pressed={reaction.reactedByMe}
-                className={cn("text-helper rounded-full border px-2 py-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30", reaction.reactedByMe ? "border-signal-cyan/40 bg-signal-cyan/10 text-signal-cyan-ink" : "border-signal-line bg-signal-surface text-signal-muted hover:border-signal-cyan/40 hover:text-signal-ink")}
+                className={cn("text-helper inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30", reaction.reactedByMe ? "border-signal-cyan/40 bg-signal-cyan/10 text-signal-cyan-ink" : "border-signal-line bg-signal-surface text-signal-muted hover:border-signal-muted hover:bg-signal-surface-raised/60 hover:text-signal-ink")}
                 disabled={!canReact}
                 key={reaction.emoji}
                 onClick={() => onReact(message, reaction.emoji)}
                 type="button"
               >
-                {reaction.emoji} {reaction.count}
+                <span className="text-sm leading-none" aria-hidden="true">{reaction.emoji}</span>
+                <span className="text-metadata">{reaction.count}</span>
               </button>
             ))}
           </div>
         )}
       </div>
-      {canAct && (
+      {canAct && <div aria-label={`Actions for message from ${message.author.name}`} className="absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-md border border-signal-line bg-signal-paper p-1 shadow-sm opacity-100 transition-opacity duration-150 sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100" role="toolbar">
+        {canReact && <div className="hidden items-center gap-0.5 sm:flex">{QUICK_REACTIONS.map((emoji) => <button aria-label={`React with ${emoji}`} className="grid size-8 place-items-center rounded-md text-sm leading-none transition-colors duration-150 hover:bg-signal-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30" key={emoji} onClick={() => onReact(message, emoji)} type="button">{emoji}</button>)}</div>}
+        <Button aria-label="Reply to message" className="hidden sm:inline-flex" onClick={() => onReply(message)} size="icon" type="button" variant="ghost"><CornerUpLeft /></Button>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button aria-label={`Actions for message from ${message.author.name}`} className="absolute right-3 top-2 size-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" size="icon-xs" type="button" variant="ghost" />}>
-            <MoreHorizontal />
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger render={<Button aria-label={`More actions for message from ${message.author.name}`} size="icon" type="button" variant="ghost" />}><MoreHorizontal /></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-36">
             <DropdownMenuItem onClick={() => onReply(message)}><CornerUpLeft /> Reply</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onReact(message, "👍")}><SmilePlus /> React 👍</DropdownMenuItem>
@@ -188,12 +190,7 @@ function MessageRow({
             {ownMessage && <DropdownMenuItem onClick={() => void onDelete(message)} variant="destructive"><Trash2 /> Delete</DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
-      )}
-      {canReact && (
-        <div className="absolute right-12 top-2 hidden gap-1 rounded-full border border-signal-line bg-signal-paper p-1 shadow-sm group-hover:flex group-focus-within:flex">
-          {QUICK_REACTIONS.map((emoji) => <button aria-label={`React with ${emoji}`} className="grid size-6 place-items-center rounded-full text-xs transition hover:bg-signal-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30" key={emoji} onClick={() => onReact(message, emoji)} type="button">{emoji}</button>)}
-        </div>
-      )}
+      </div>}
     </article>
   )
 }
@@ -548,7 +545,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-background" aria-label={`Messages in ${title}`}>
+    <section className="flex max-h-full min-h-0 flex-1 flex-col overflow-hidden bg-background" aria-label={`Messages in ${title}`}>
       <div className="min-h-0 flex-1 overflow-y-auto bg-background" ref={scrollRef}>
         {historyState === "loading" && (
           <div className="grid min-h-full place-items-center p-6" role="status">
@@ -593,8 +590,12 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
             ) : messages.map((message, index) => {
               const previous = messages[index - 1]
               const unread = isFirstUnread(message, index)
-              const grouped = !unread && message.delivery !== "sending" && message.delivery !== "failed" && !message.editedAt && Boolean(previous && previous.author.id === message.author.id && new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime() < 5 * 60_000)
+              const messageDate = new Date(message.createdAt)
+              const previousDate = previous ? new Date(previous.createdAt) : null
+              const startsDay = !previousDate || messageDate.toDateString() !== previousDate.toDateString()
+              const grouped = !unread && !startsDay && message.delivery !== "sending" && message.delivery !== "failed" && !message.editedAt && Boolean(previous && previousDate && previous.author.id === message.author.id && messageDate.getTime() - previousDate.getTime() < 5 * 60_000)
               return <div key={`${message.id}:${archived}`}>
+                {startsDay && <div className="my-4 flex items-center gap-3 px-5" role="separator" aria-label={dateFormatter.format(messageDate)}><span className="h-px flex-1 bg-signal-line" /><time className="text-metadata rounded-full border border-signal-line bg-signal-paper px-2.5 py-1 font-medium text-signal-muted" dateTime={message.createdAt}>{dateFormatter.format(messageDate)}</time><span className="h-px flex-1 bg-signal-line" /></div>}
                 {unread && <div className="text-metadata my-3 flex items-center gap-3 px-5 font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />New messages<span className="h-px flex-1 bg-signal-amber/35" /></div>}
                 <MessageRow archived={archived} currentUserId={user.id} grouped={grouped} message={message} onDelete={deleteMessage} onEdit={editMessage} onReact={reactToMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
               </div>
@@ -603,7 +604,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
         )}
       </div>
 
-      <div className="shrink-0 border-t border-signal-line bg-background/95 px-3 py-3 sm:px-5">
+      <div className="shrink-0 border-t border-signal-line bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-5">
         {archived ? (
           <div className="mx-auto max-w-6xl rounded-md border border-signal-line bg-signal-surface px-3 py-2.5 text-xs text-signal-muted"><span className="font-semibold text-signal-ink">Read-only archive.</span> This channel history remains available, but messages, replies, reactions, and attachments are closed.</div>
         ) : (
@@ -615,14 +616,14 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
                 <Button aria-label="Cancel reply" onClick={() => setReplyingTo(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
               </div>
             )}
-            <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
+            <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface transition-[border-color,box-shadow] duration-150 focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
               {typingUsers.length > 0 && <p className="text-helper border-b border-signal-line px-3 py-1.5 text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
               <Textarea
                 ref={composerRef}
                 aria-label={`Message ${title}`}
                 aria-describedby={composerError ? "composer-error" : undefined}
                 aria-invalid={Boolean(composerError) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT}
-                className="min-h-18 max-h-48 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-sm leading-5 shadow-none focus-visible:border-0 focus-visible:ring-0"
+                className="min-h-14 max-h-48 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-sm font-normal leading-5 shadow-none placeholder:text-signal-muted focus-visible:border-0 focus-visible:ring-0"
                 onBlur={() => socketRef.current?.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })}
                 onChange={(event) => { setDraft(event.target.value); if (composerError) setComposerError(""); emitTypingStart() }}
                 onKeyDown={handleComposerKeyDown}
@@ -632,16 +633,16 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
               {pendingAttachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 border-t border-signal-line px-3 py-2">
                   {pendingAttachments.map((attachment) => (
-                    <span className="text-helper inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1" key={attachment.id}>
-                      <Paperclip className="size-3" />
-                      <span className="max-w-40 truncate">{attachment.originalFilename}</span>
-                      <button className="text-signal-muted hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button">Remove</button>
+                    <span className="text-helper inline-flex min-h-8 items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1" key={attachment.id}>
+                      <FileText className="size-3.5 text-signal-muted" />
+                      <span className="max-w-40 truncate font-medium">{attachment.originalFilename}</span>
+                      <button aria-label={`Remove ${attachment.originalFilename}`} className="grid size-5 place-items-center rounded-sm text-signal-muted transition-colors hover:bg-destructive/10 hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button"><X className="size-3" /></button>
                     </span>
                   ))}
                 </div>
               )}
               <div className="flex min-h-10 items-center gap-1 border-t border-signal-line px-2.5">
-                <label aria-label="Attach a file" className={cn("inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-signal-muted transition-colors hover:bg-signal-surface-raised hover:text-signal-ink", uploadingAttachment && "pointer-events-none opacity-50")}>
+                <label aria-label="Attach a file" className={cn("inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-signal-muted transition-colors duration-150 hover:bg-signal-surface-raised hover:text-signal-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-signal-cyan", uploadingAttachment && "pointer-events-none opacity-50")}>
                   <Paperclip className="size-3.5" />
                   <input className="sr-only" disabled={uploadingAttachment || pendingAttachments.length >= 5} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.currentTarget.value = "" }} type="file" />
                 </label>

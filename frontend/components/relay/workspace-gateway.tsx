@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Link2, LogOut, Plus, RadioTower } from "lucide-react"
-import { startTransition, useEffect, useState, type FormEvent } from "react"
+import { ArrowRight, Link2, LogOut, Plus, RadioTower, Search } from "lucide-react"
+import { startTransition, useDeferredValue, useEffect, useState, type FormEvent } from "react"
 
 import { BrandLogo } from "@/components/relay/brand-logo"
 import { ThemeControl } from "@/components/relay/theme-control"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
 import type { AuthUserDTO, WorkspaceDTO } from "@/lib/api/contracts"
 
@@ -33,6 +34,12 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [workspaceQuery, setWorkspaceQuery] = useState("")
+  const deferredWorkspaceQuery = useDeferredValue(workspaceQuery)
+  const showWorkspaceSearch = workspaces.length >= 6
+  const filteredWorkspaces = deferredWorkspaceQuery.trim()
+    ? workspaces.filter((workspace) => workspace.name.toLocaleLowerCase().includes(deferredWorkspaceQuery.trim().toLocaleLowerCase()))
+    : workspaces
 
   useEffect(() => {
     let cancelled = false
@@ -133,16 +140,45 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
         <section className="panel-prominent px-5">
           {workspaces.length > 0 && (
             <div className="border-b border-signal-line py-6">
-              <h2 className="text-sm font-semibold">Your workspaces</h2>
-              <div className="mt-3 divide-y divide-signal-line">
-                {workspaces.map((workspace) => (
-                  <Link className="flex min-h-14 items-center gap-3 py-3 text-sm transition-colors hover:text-signal-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber" href={`/app/${workspace.slug}`} key={workspace.id}>
-                    <span className="text-metadata grid size-8 place-items-center rounded-md bg-signal-carbon font-bold text-signal-panel-text">{workspace.name.slice(0, 2).toUpperCase()}</span>
-                    <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{workspace.name}</span><span className="text-xs text-signal-muted">{workspace.currentUserRole.toLowerCase()}</span></span>
-                    <ArrowRight className="size-4" />
-                  </Link>
-                ))}
+              <div className="flex items-baseline justify-between gap-4">
+                <h2 className="text-sm font-semibold">Your workspaces</h2>
+                <span className="text-metadata text-signal-muted">{workspaces.length} total</span>
               </div>
+              {showWorkspaceSearch && (
+                <div className="relative mt-3">
+                  <label className="sr-only" htmlFor="workspace-search">Find a workspace</label>
+                  <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-signal-muted" />
+                  <Input className="pl-9" id="workspace-search" onChange={(event) => setWorkspaceQuery(event.target.value)} placeholder="Find a workspace" type="search" value={workspaceQuery} />
+                </div>
+              )}
+              {showWorkspaceSearch ? (
+                <ScrollArea aria-label="Your workspaces" className="mt-3 h-[min(18rem,36dvh)] pr-3">
+                  <div className="divide-y divide-signal-line" role="list">
+                    {filteredWorkspaces.map((workspace) => (
+                      <div key={workspace.id} role="listitem">
+                        <Link className="flex min-h-14 items-center gap-3 py-3 text-sm transition-colors hover:text-signal-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber" href={`/app/${workspace.slug}`}>
+                          <span className="text-metadata grid size-8 place-items-center rounded-md bg-signal-carbon font-bold text-signal-panel-text">{workspace.name.slice(0, 2).toUpperCase()}</span>
+                          <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{workspace.name}</span><span className="text-xs text-signal-muted">{workspace.currentUserRole.toLowerCase()}</span></span>
+                          <ArrowRight aria-hidden="true" className="size-4" />
+                        </Link>
+                      </div>
+                    ))}
+                    {filteredWorkspaces.length === 0 && <p className="py-8 text-center text-sm text-signal-muted">No workspaces match &quot;{deferredWorkspaceQuery.trim()}&quot;.</p>}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="mt-3 divide-y divide-signal-line" role="list">
+                  {filteredWorkspaces.map((workspace) => (
+                    <div key={workspace.id} role="listitem">
+                      <Link className="flex min-h-14 items-center gap-3 py-3 text-sm transition-colors hover:text-signal-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber" href={`/app/${workspace.slug}`}>
+                        <span className="text-metadata grid size-8 place-items-center rounded-md bg-signal-carbon font-bold text-signal-panel-text">{workspace.name.slice(0, 2).toUpperCase()}</span>
+                        <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{workspace.name}</span><span className="text-xs text-signal-muted">{workspace.currentUserRole.toLowerCase()}</span></span>
+                        <ArrowRight aria-hidden="true" className="size-4" />
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

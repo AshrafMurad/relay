@@ -11,9 +11,17 @@ const members = [
   { id: "member-1", userId: user.id, email: user.email, name: user.name, image: null, role: "OWNER", joinedAt: now },
   { id: "member-2", userId: "user-2", email: "owen@northstar.test", name: "Owen Park", image: null, role: "MEMBER", joinedAt: now },
 ]
-const conversations = [
-  { id: "dm-1", workspaceId: workspace.id, participantKey: "user-1:user-2", otherUser: { id: "user-2", name: "Owen Park", email: "owen@northstar.test", image: null }, lastMessageAt: now, unreadCount: 1, lastReadMessageId: null, createdAt: now, updatedAt: now },
-]
+const conversations = ["Owen Park", "Ava Stone", "Iris Hayes", "Sam Okafor", "Jules Rivera", "Leo Brooks", "Nora Patel"].map((name, index) => ({
+  id: `dm-${index + 1}`,
+  workspaceId: workspace.id,
+  participantKey: `user-1:user-${index + 2}`,
+  otherUser: { id: `user-${index + 2}`, name, email: `${name.toLowerCase().replace(" ", ".")}@northstar.test`, image: null },
+  lastMessageAt: now,
+  unreadCount: index === 0 ? 1 : 0,
+  lastReadMessageId: null,
+  createdAt: now,
+  updatedAt: now,
+}))
 const messages = [
   { id: "message-1", workspaceId: workspace.id, channelId: "channel-1", directConversationId: null, operationId: "operation-1", author: { id: "user-2", name: "Owen Park", image: null }, content: "The reconnect check passed. Release notes are ready for review.", parentMessageId: null, parent: null, attachments: [], reactions: [{ emoji: "✅", count: 2, reactedByMe: false }], editedAt: null, deletedAt: null, createdAt: now, updatedAt: now },
 ]
@@ -59,5 +67,35 @@ test("keeps workspace routing and shell actions legible in both themes", async (
     await page.screenshot({ fullPage: true, path: testInfo.outputPath("workspace-shell-light.png") })
     await page.getByRole("button", { name: "Use dark theme" }).last().click()
     await page.screenshot({ fullPage: true, path: testInfo.outputPath("workspace-shell-dark.png") })
+  }
+})
+
+test("keeps shell chrome visible in a short desktop viewport", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop viewport regression")
+  await page.setViewportSize({ width: 1920, height: 420 })
+  await page.goto("/app/northstar/channels/channel-1")
+
+  const header = page.getByRole("heading", { name: "launch-room" })
+  const composer = page.getByPlaceholder("Message #launch-room")
+  const profileAction = page.getByRole("button", { name: "Use light theme" })
+  const sendAction = page.getByRole("button", { name: "Send message" })
+
+  await expect(header).toBeVisible()
+  await expect(composer).toBeVisible()
+  await expect(profileAction).toBeVisible()
+  await expect(sendAction).toBeVisible()
+
+  const navigationScrolls = await page.getByRole("navigation", { name: "Direct messages" }).evaluate((element) => {
+    let parent = element.parentElement
+    while (parent && !["auto", "scroll"].includes(getComputedStyle(parent).overflowY)) parent = parent.parentElement
+    return Boolean(parent && parent.scrollHeight > parent.clientHeight)
+  })
+  expect(navigationScrolls).toBe(true)
+
+  for (const element of [header, composer, profileAction, sendAction]) {
+    const box = await element.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.y).toBeGreaterThanOrEqual(0)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(420)
   }
 })

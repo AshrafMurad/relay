@@ -258,6 +258,11 @@
     @apply font-sans;
   }
 
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground;
     overflow: hidden;
@@ -273,6 +278,12 @@
   input,
   textarea {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  label {
+    touch-action: manipulation;
   }
 
   textarea {
