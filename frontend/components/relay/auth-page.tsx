@@ -108,7 +108,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             password: values.password,
           }),
         })
-        router.push("/workspace")
+        router.replace("/workspace")
         return
       }
 
@@ -116,7 +116,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         method: "POST",
         body: JSON.stringify({ email: values.email, password: values.password }),
       })
-      router.push("/workspace")
+      router.replace("/workspace")
     } catch (error) {
       const apiFieldErrors = fieldErrorFromError(error)
       if (apiFieldErrors) setFieldErrors(apiFieldErrors)
