@@ -85,6 +85,7 @@ async function createSession(
 export async function signUp(
   prisma: PrismaClient,
   input: { email: string; name: string; password: string },
+  requestMeta: { ipAddress?: string; userAgent?: string },
 ) {
   const email = normalizeEmail(input.email);
   const name = input.name.trim();
@@ -109,7 +110,8 @@ export async function signUp(
     return createdUser;
   });
 
-  return { user: toAuthUserDTO(user) };
+  const { token } = await createSession(prisma, user.id, requestMeta);
+  return { token, user: toAuthUserDTO(user) };
 }
 
 export async function verifyEmail(prisma: PrismaClient, token: string) {

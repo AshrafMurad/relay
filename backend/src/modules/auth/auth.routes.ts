@@ -38,8 +38,12 @@ export function createAuthRouter(prisma: PrismaClient, environment: Pick<Environ
 
   router.post("/signup", asyncHandler(async (request, response) => {
     const input = parseBody(signUpSchema, request.body);
-    const result = await signUp(prisma, input);
-    response.status(201).json(result);
+    const { token, user } = await signUp(prisma, input, {
+      ipAddress: request.ip,
+      userAgent: request.get("user-agent"),
+    });
+    response.cookie(SESSION_COOKIE_NAME, token, sessionCookieOptions(environment.NODE_ENV === "production"));
+    response.status(201).json({ user });
   }));
 
   router.post("/verify-email", asyncHandler(async (request, response) => {

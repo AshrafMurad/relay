@@ -108,7 +108,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             password: values.password,
           }),
         })
-        setStatus({ tone: "success", message: "Account created. You can sign in now." })
+        router.push("/workspace")
         return
       }
 
@@ -147,7 +147,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 </h1>
                 <p className="mt-6 max-w-xl text-base leading-7 text-signal-panel-muted">
                   {isSignup
-                    ? "Create your account, then move into workspace setup to create a team space or accept an invitation."
+                    ? "Create your account and continue directly into workspace setup to create a team space or accept an invitation."
                     : "Log in to continue to workspace setup, channel navigation, direct messages, and the realtime Relay shell."}
                 </p>
               </div>
@@ -209,7 +209,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-signal-cyan" aria-hidden="true" />What happens next</div>
               <p className="mt-2 text-sm leading-6 text-signal-muted">
                 {isSignup
-                  ? "After signup, log in and use workspace setup to create your team space or accept an invitation token."
+                  ? "Successful signup routes you to workspace setup, where you can create a workspace or enter an existing one."
                   : "Successful login routes you to workspace setup, where you can create a workspace or enter an existing one."}
               </p>
             </div>
