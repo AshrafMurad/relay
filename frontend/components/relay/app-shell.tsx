@@ -97,7 +97,7 @@ function ChannelDetails({ channel, currentUserId, members, onlineUserIds }: { ch
     : members
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-signal-panel text-signal-panel-text">
+    <div className="theme-navigation flex h-full min-h-0 flex-col bg-signal-panel text-signal-panel-text">
       <div className="flex h-[60px] shrink-0 items-center border-b border-sidebar-border px-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">Channel details</h2>
@@ -372,7 +372,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   }
 
   const navigation = (
-    <div className="flex h-full min-h-0 flex-col bg-signal-panel">
+    <div className="theme-navigation flex h-full min-h-0 flex-col bg-signal-panel">
       <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button className="h-11 min-w-0 flex-1 justify-start px-2 text-signal-panel-text hover:bg-sidebar-accent" variant="ghost" />}>
@@ -492,7 +492,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   return (
     <TooltipProvider>
       <div className={cn("grid h-dvh overflow-hidden bg-signal-paper text-signal-ink md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[64px_260px_minmax(0,1fr)]", selectedChannel && "xl:grid-cols-[64px_260px_minmax(0,1fr)_292px]")}>
-        <aside className="hidden h-dvh flex-col items-center border-r border-signal-line bg-signal-carbon py-3 md:flex">
+        <aside className="theme-navigation hidden h-dvh flex-col items-center border-r border-sidebar-border bg-signal-carbon py-3 md:flex">
           <div className="mb-4 size-8"><BrandLogo mark="icon" priority /><span className="sr-only">Relay</span></div>
           <nav aria-label="Workspaces" className="flex flex-1 flex-col gap-2">
             {workspaces.map((item) => (
@@ -517,7 +517,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-signal-line bg-signal-paper/95 px-3 sm:px-5">
             <Sheet onOpenChange={setNavigationOpen} open={navigationOpen}>
               <SheetTrigger render={<Button aria-label="Open navigation" className="lg:hidden" size="icon" type="button" variant="ghost" />}><Menu /></SheetTrigger>
-              <SheetContent className="w-[min(88vw,320px)] gap-0 border-signal-line bg-signal-panel p-0" side="left">
+              <SheetContent className="theme-navigation w-[min(88vw,320px)] gap-0 border-sidebar-border bg-signal-panel p-0" side="left">
                 <SheetHeader className="sr-only"><SheetTitle>Workspace navigation</SheetTitle><SheetDescription>Choose a workspace or channel.</SheetDescription></SheetHeader>
                 {navigation}
               </SheetContent>
@@ -581,7 +581,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
 
         {selectedChannel && <aside className="hidden min-w-0 border-l border-signal-line xl:block"><ChannelDetails channel={selectedChannel} currentUserId={user.id} members={members} onlineUserIds={onlineUserIds} /></aside>}
 
-        {selectedChannel && <Sheet onOpenChange={setDetailsOpen} open={detailsOpen}><SheetContent className="w-[min(92vw,340px)] gap-0 border-signal-line bg-signal-panel p-0" side="right"><SheetHeader className="sr-only"><SheetTitle>Channel details</SheetTitle><SheetDescription>Information and members for #{selectedChannel.name}.</SheetDescription></SheetHeader><ChannelDetails channel={selectedChannel} currentUserId={user.id} members={members} onlineUserIds={onlineUserIds} /></SheetContent></Sheet>}
+        {selectedChannel && <Sheet onOpenChange={setDetailsOpen} open={detailsOpen}><SheetContent className="theme-navigation w-[min(92vw,340px)] gap-0 border-sidebar-border bg-signal-panel p-0" side="right"><SheetHeader className="sr-only"><SheetTitle>Channel details</SheetTitle><SheetDescription>Information and members for #{selectedChannel.name}.</SheetDescription></SheetHeader><ChannelDetails channel={selectedChannel} currentUserId={user.id} members={members} onlineUserIds={onlineUserIds} /></SheetContent></Sheet>}
 
         <Dialog open={isUtilityPage} onOpenChange={(open) => { if (!open) closeUtilityPage() }}>
           <DialogContent className={cn("max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-lg border border-signal-line bg-signal-paper p-0 text-signal-ink ring-0 sm:max-w-2xl", isMembersPage && "sm:max-w-4xl")}>

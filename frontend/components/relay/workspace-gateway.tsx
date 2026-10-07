@@ -111,8 +111,14 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
 
   return (
     <main className="h-dvh overflow-y-auto bg-background text-foreground">
-      <header className="flex h-16 items-center justify-between border-b border-sidebar-border bg-sidebar px-5 text-sidebar-foreground sm:px-8">
-        <Link aria-label="Relay home" className="w-28" href="/"><BrandLogo priority /></Link>
+      <header className="theme-navigation flex h-16 items-center justify-between border-b border-sidebar-border bg-sidebar px-5 text-sidebar-foreground sm:px-8">
+        <Link aria-label="Relay home" className="flex shrink-0 items-center" href="/">
+          <BrandLogo className="hidden w-28 dark:block" priority />
+          <span className="flex items-center gap-2 dark:hidden">
+            <span className="size-8"><BrandLogo mark="icon" priority /></span>
+            <span className="text-lg font-semibold tracking-[-0.025em] text-signal-ink">Relay</span>
+          </span>
+        </Link>
         <div className="flex items-center gap-2"><ThemeControl className="hover:bg-sidebar-accent" />{user && <><span className="hidden text-xs text-sidebar-foreground/70 sm:inline">{user.email}</span><Button className="hover:bg-sidebar-accent" onClick={() => void signOut()} size="sm" type="button" variant="ghost"><LogOut />Sign out</Button></>}</div>
       </header>
 

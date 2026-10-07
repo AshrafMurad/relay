@@ -23,10 +23,14 @@ export function PublicNavigation() {
   return (
     <nav
       aria-label="Public navigation"
-      className="flex min-h-14 shrink-0 items-center justify-between gap-3 rounded-2xl border border-sidebar-border bg-sidebar px-3 text-sidebar-foreground sm:px-5"
+      className="theme-navigation flex min-h-14 shrink-0 items-center justify-between gap-3 rounded-2xl border border-sidebar-border bg-sidebar px-3 text-sidebar-foreground sm:px-5"
     >
-      <Link aria-label="Relay home" className="flex w-24 shrink-0 sm:w-32" href="/">
-        <BrandLogo priority />
+      <Link aria-label="Relay home" className="flex shrink-0 items-center" href="/">
+        <BrandLogo className="hidden w-24 dark:block sm:w-32" priority />
+        <span className="flex items-center gap-2 dark:hidden">
+          <span className="size-8"><BrandLogo mark="icon" priority /></span>
+          <span className="text-lg font-semibold tracking-[-0.025em] text-signal-ink">Relay</span>
+        </span>
       </Link>
       <div className="flex items-center gap-1.5 sm:gap-2">
         <ThemeControl className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />

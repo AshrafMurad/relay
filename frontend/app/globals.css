@@ -216,6 +216,19 @@
     padding: 0.75rem;
   }
 
+  :root:not(.dark) .theme-navigation {
+    --sidebar: var(--signal-surface);
+    --sidebar-foreground: var(--signal-ink);
+    --sidebar-accent: var(--signal-surface-raised);
+    --sidebar-accent-foreground: var(--signal-ink);
+    --sidebar-border: var(--signal-line);
+    --signal-carbon: var(--signal-surface-raised);
+    --signal-panel: var(--signal-surface);
+    --signal-panel-raised: var(--signal-surface-raised);
+    --signal-panel-text: var(--signal-ink);
+    --signal-panel-muted: var(--signal-muted);
+  }
+
   .panel-prominent {
     border: 1px solid color-mix(in srgb, var(--border), var(--ring) 18%);
     border-radius: var(--radius-2xl);
