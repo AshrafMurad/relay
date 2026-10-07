@@ -84,20 +84,20 @@ function AuthArtworkOverlay({ isSignup }: { isSignup: boolean }) {
         </div>
       </div>
 
-      <div className="grid gap-4 border-t border-white/10 pt-5 text-signal-panel-muted sm:grid-cols-3 lg:gap-5">
+      <div className="grid gap-4 border-t border-sidebar-border pt-5 text-signal-panel-muted sm:grid-cols-3 lg:gap-5">
         <div className="flex gap-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-signal-amber/80 text-signal-amber">
             <Hash className="size-5" aria-hidden="true" />
           </span>
           <p className="text-sm leading-5"><span className="block font-semibold text-white">Channels</span>Keep work organized across teams.</p>
         </div>
-        <div className="flex gap-4 sm:border-l sm:border-white/10 sm:pl-5">
+        <div className="flex gap-4 sm:border-l sm:border-sidebar-border sm:pl-5">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-signal-cyan/75 text-signal-cyan">
             <UserRound className="size-5" aria-hidden="true" />
           </span>
           <p className="text-sm leading-5"><span className="block font-semibold text-white">Presence</span>See who&apos;s online and in the flow.</p>
         </div>
-        <div className="flex gap-4 sm:border-l sm:border-white/10 sm:pl-5">
+        <div className="flex gap-4 sm:border-l sm:border-sidebar-border sm:pl-5">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-signal-cyan/75 text-signal-cyan">
             <Zap className="size-5" aria-hidden="true" />
           </span>

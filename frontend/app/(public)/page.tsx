@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 export default function Home() {
   return (
     <main className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] lg:items-stretch">
-          <section className="flex flex-col justify-between rounded-2xl border border-white/10 bg-signal-panel p-5 md:p-8">
+          <section className="flex flex-col justify-between rounded-2xl border border-sidebar-border bg-signal-panel p-5 md:p-8">
             <div className="max-w-2xl py-6 md:py-10 lg:py-12">
-              <div className="mb-7 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-signal-cyan">
+              <div className="mb-7 flex w-fit items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/40 px-3 py-1.5 text-xs font-medium text-signal-cyan">
                 <RadioTower className="size-3.5" aria-hidden="true" />
                 Signal clear for small remote teams
               </div>
@@ -24,7 +24,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid gap-3 border-t border-white/10 pt-5 text-sm text-signal-panel-muted sm:grid-cols-2">
+            <div className="grid gap-3 border-t border-sidebar-border pt-5 text-sm text-signal-panel-muted sm:grid-cols-2">
               <p className="flex gap-3"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-signal-cyan" aria-hidden="true" /><span><span className="block font-semibold text-signal-panel-text">Permission-aware by default</span>Workspace operations are scoped to membership and role.</span></p>
               <p className="flex gap-3"><Clock3 className="mt-0.5 size-4 shrink-0 text-signal-cyan" aria-hidden="true" /><span><span className="block font-semibold text-signal-panel-text">Built for reconnects</span>Durable messages stay canonical when a browser returns.</span></p>
             </div>
@@ -35,7 +35,7 @@ export default function Home() {
               <aside className="hidden border-r border-signal-line bg-signal-panel p-3 text-signal-panel-text lg:block">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold">Northstar Lab</p>
-                  <span className="rounded-full bg-signal-amber px-1.5 py-0.5 text-[10px] font-bold text-signal-carbon">3</span>
+                  <span className="text-metadata rounded-full bg-signal-amber px-1.5 py-0.5 font-bold text-signal-carbon">3</span>
                 </div>
                 <div className="mt-5 grid gap-1 text-sm">
                   <div className="rounded-md bg-signal-amber/10 px-3 py-2 font-semibold text-signal-amber"># launch-room</div>
@@ -43,7 +43,7 @@ export default function Home() {
                   <div className="flex items-center justify-between px-3 py-2 text-signal-panel-muted"><span># backend</span><span className="size-1.5 rounded-full bg-signal-amber" /></div>
                   <div className="px-3 py-2 text-signal-panel-muted"># support</div>
                 </div>
-                <div className="mt-8 border-t border-white/10 pt-4">
+                <div className="mt-8 border-t border-sidebar-border pt-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-signal-panel-muted">Direct</p>
                   <div className="mt-3 grid gap-2 text-sm text-signal-panel-muted">
                     <p className="flex items-center gap-2"><span className="size-2 rounded-full bg-signal-cyan" />Mina Chen</p>
@@ -63,7 +63,7 @@ export default function Home() {
 
                 <div className="flex min-h-0 flex-col justify-end gap-4 overflow-hidden p-4 md:p-6">
                   <div className="max-w-[82ch]">
-                    <div className="flex items-center gap-2 text-sm font-semibold"><span className="grid size-8 place-items-center rounded-md bg-signal-surface-raised text-xs">MC</span>Mina Chen <span className="font-mono text-[10px] font-normal text-signal-muted">09:41</span></div>
+                    <div className="flex items-center gap-2 text-sm font-semibold"><span className="grid size-8 place-items-center rounded-md bg-signal-surface-raised text-xs">MC</span>Mina Chen <span className="text-metadata font-normal text-signal-muted">09:41</span></div>
                     <p className="mt-2 pl-10 text-sm leading-6 text-signal-muted">Invite flow is scoped to admins now. I left notes in the thread and the reconnect check recovered the missed channel update.</p>
                   </div>
                   <div className="ml-auto max-w-[82ch] rounded-lg border border-signal-amber/30 bg-signal-amber/10 p-4">
@@ -71,7 +71,7 @@ export default function Home() {
                     <p className="mt-2 text-sm leading-6 text-signal-muted">Homepage points to sign up and login. Auth routes land on workspace setup before the app shell.</p>
                   </div>
                   <div className="max-w-[82ch]">
-                    <div className="flex items-center gap-2 text-sm font-semibold"><span className="grid size-8 place-items-center rounded-md bg-signal-surface-raised text-xs">OP</span>Owen Park <span className="font-mono text-[10px] font-normal text-signal-muted">09:43</span></div>
+                    <div className="flex items-center gap-2 text-sm font-semibold"><span className="grid size-8 place-items-center rounded-md bg-signal-surface-raised text-xs">OP</span>Owen Park <span className="text-metadata font-normal text-signal-muted">09:43</span></div>
                     <p className="mt-2 pl-10 text-sm leading-6 text-signal-muted">Typing states stay ephemeral. Message order still comes from the server timestamp.</p>
                   </div>
                 </div>

@@ -1,39 +1,39 @@
 ---
 name: Relay
-description: A precise, dark-first communication workspace with restrained routing signals and quiet realtime awareness.
+description: A precise, dark-first communication workspace with auth-derived contrast, orange routing signals, and electric-cyan realtime awareness.
 colors:
-  light-carbon: "#0d171b"
-  light-panel: "#16252b"
-  light-panel-raised: "#21343b"
-  light-panel-text: "#e9e6dc"
-  light-panel-muted: "#a9b5b5"
-  light-paper: "#f4f1e8"
-  light-surface: "#fbfaf5"
-  light-surface-raised: "#e8e7df"
-  light-ink: "#192326"
-  light-muted: "#5f6b6e"
-  light-line: "#c8cdc5"
-  light-relay-orange: "#f2a23a"
-  light-relay-orange-ink: "#87510d"
-  light-realtime-cyan: "#3d98a3"
-  light-realtime-cyan-ink: "#1f6972"
-  light-status-green: "#3f795b"
-  dark-carbon: "#080e12"
-  dark-panel: "#0d1519"
-  dark-panel-raised: "#18252a"
-  dark-panel-text: "#e5e9e7"
-  dark-panel-muted: "#8c9a9d"
-  dark-paper: "#0b1216"
-  dark-surface: "#111a1e"
-  dark-surface-raised: "#18252a"
-  dark-ink: "#e5e9e7"
-  dark-muted: "#819095"
-  dark-line: "#202f35"
-  dark-relay-orange: "#f5a137"
-  dark-relay-orange-ink: "#f7b55d"
-  dark-realtime-cyan: "#55c2c9"
-  dark-realtime-cyan-ink: "#78d0d5"
-  dark-status-green: "#55c2c9"
+  light-carbon: "#050c10"
+  light-panel: "#071116"
+  light-panel-raised: "#13252e"
+  light-panel-text: "#eef4f5"
+  light-panel-muted: "#a9b5bf"
+  light-paper: "#edf3f4"
+  light-surface: "#f8fbfb"
+  light-surface-raised: "#dce8ea"
+  light-ink: "#102027"
+  light-muted: "#516871"
+  light-line: "#b5c9ce"
+  light-relay-orange: "#df850d"
+  light-relay-orange-ink: "#925000"
+  light-realtime-cyan: "#007f8c"
+  light-realtime-cyan-ink: "#006873"
+  light-status-green: "#287453"
+  dark-carbon: "#050c10"
+  dark-panel: "#071116"
+  dark-panel-raised: "#13252e"
+  dark-panel-text: "#eef4f5"
+  dark-panel-muted: "#a9b5bf"
+  dark-paper: "#050c10"
+  dark-surface: "#0b141a"
+  dark-surface-raised: "#13252e"
+  dark-ink: "#eef4f5"
+  dark-muted: "#a9b5bf"
+  dark-line: "#28404a"
+  dark-relay-orange: "#ffa42e"
+  dark-relay-orange-ink: "#ffc06c"
+  dark-realtime-cyan: "#00f5ff"
+  dark-realtime-cyan-ink: "#72f8ff"
+  dark-status-green: "#58d6a1"
   destructive-light: "#b83f37"
   destructive-dark: "#e07068"
 typography:
@@ -51,19 +51,19 @@ typography:
     letterSpacing: "normal"
   body:
     fontFamily: "Archivo, sans-serif"
-    fontSize: "12px"
+    fontSize: "14px"
     fontWeight: 400
-    lineHeight: "20px"
+    lineHeight: 1.625
     letterSpacing: "normal"
   label:
     fontFamily: "Archivo, sans-serif"
-    fontSize: "10px"
-    fontWeight: 500
+    fontSize: "13px"
+    fontWeight: 600
     lineHeight: 1.25
     letterSpacing: "normal"
   metadata:
     fontFamily: "Geist Mono, monospace"
-    fontSize: "9px"
+    fontSize: "10px"
     fontWeight: 400
     lineHeight: 1.25
     letterSpacing: "normal"
@@ -136,9 +136,9 @@ components:
 
 **Creative North Star: "The Signal Routing Desk"**
 
-Relay is a precise, dark-first operating surface for ongoing team communication. Its near-black rails, low-contrast panels, hairline separators, and compact controls keep the message stream dominant; identity appears as a restrained route of orange from the Relay mark through the active workspace, current conversation, unread activity, and primary send action.
+Relay is a precise, dark-first operating surface for ongoing team communication. Its auth-derived near-black rails, crisp blue-green borders, high-contrast panels, and compact controls keep the message stream dominant; identity appears as a restrained route of orange from the Relay mark through the active workspace, current conversation, unread activity, and primary send action.
 
-Realtime confidence is present without turning the product into a monitoring console. Cyan quietly carries healthy presence, synchronization, active reactions, typing, and connection focus, while ordinary navigation and content remain neutral. Light mode is a warm-paper counterpart, not an inversion: it preserves the same hierarchy and state meanings with cream surfaces, deep blue-green navigation, and adjusted ink and border values.
+Realtime confidence is present without turning the product into a monitoring console. Electric cyan carries healthy presence, synchronization, active reactions, typing, links, and connection focus, while ordinary navigation and content remain neutral. Light mode is a cool-paper counterpart, not an inversion: it preserves the same hierarchy and state meanings with pale blue-green surfaces, deep blue-green navigation, and adjusted ink and border values.
 
 **Key Characteristics:**
 

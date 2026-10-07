@@ -6,9 +6,10 @@ import { usePathname, useSearchParams } from "next/navigation"
 
 import { BrandLogo } from "@/components/relay/brand-logo"
 import { ThemeControl } from "@/components/relay/theme-control"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { safeNextPath } from "@/lib/auth/redirect"
 import { usePublicSession } from "@/components/relay/public-session-provider"
+import { cn } from "@/lib/utils"
 
 export function PublicNavigation() {
   const pathname = usePathname()
@@ -31,7 +32,7 @@ export function PublicNavigation() {
         <ThemeControl className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
         {user ? (
           <>
-            <Button nativeButton={false} render={<Link href="/app" />} size="sm">Open Relay</Button>
+            <Link className={buttonVariants({ size: "sm" })} href="/app">Open Relay</Link>
             <Button
               aria-label="Use another account"
               className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -46,25 +47,20 @@ export function PublicNavigation() {
           </>
         ) : (
           <>
-            <Button
+            <Link
               aria-current={pathname === "/login" ? "page" : undefined}
-              className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              nativeButton={false}
-              render={<Link href={`/login${query}`} />}
-              size="sm"
-              variant={pathname === "/login" ? "outline" : "ghost"}
+              className={cn(buttonVariants({ size: "sm", variant: pathname === "/login" ? "outline" : "ghost" }), "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")}
+              href={`/login${query}`}
             >
               Log in
-            </Button>
-            <Button
+            </Link>
+            <Link
               aria-current={pathname === "/signup" ? "page" : undefined}
-              nativeButton={false}
-              render={<Link href={`/signup${query}`} />}
-              size="sm"
-              variant={pathname === "/signup" ? "outline" : "default"}
+              className={buttonVariants({ size: "sm", variant: pathname === "/signup" ? "outline" : "default" })}
+              href={`/signup${query}`}
             >
               Sign up
-            </Button>
+            </Link>
           </>
         )}
       </div>

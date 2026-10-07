@@ -4,12 +4,10 @@ import { Check, Clipboard, MailPlus, Shield, UserRound, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
 import type { WorkspaceDTO, WorkspaceInvitationDTO, WorkspaceMemberDTO, WorkspaceRole } from "@/lib/api/contracts"
-
-function inputClass() {
-  return "h-9 rounded-md border border-signal-line bg-signal-surface px-3 text-sm text-signal-ink outline-none transition focus:border-signal-cyan focus:ring-2 focus:ring-signal-cyan/15"
-}
 
 function invitationState(invitation: WorkspaceInvitationDTO) {
   if (invitation.acceptedAt) return "Accepted"
@@ -107,12 +105,12 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
           <section className="border-b border-signal-line pb-5">
             <div className="flex items-center gap-2"><MailPlus className="size-4 text-signal-cyan" /><h2 className="text-sm font-semibold">Invite a teammate</h2></div>
             <form className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]" onSubmit={invite}>
-              <label className="sr-only" htmlFor="invite-email">Email address</label><input className={inputClass()} id="invite-email" name="email" placeholder="teammate@example.com" required type="email" />
-              <label className="sr-only" htmlFor="invite-role">Role</label><select className={inputClass()} id="invite-role" name="role"><option value="MEMBER">Member</option>{workspace?.currentUserRole === "OWNER" && <option value="ADMIN">Admin</option>}</select>
+              <label className="sr-only" htmlFor="invite-email">Email address</label><Input fieldSize="compact" id="invite-email" name="email" placeholder="teammate@example.com" required type="email" />
+              <label className="sr-only" id="invite-role-label">Role</label><Select defaultValue="MEMBER" name="role"><SelectTrigger aria-labelledby="invite-role-label" className="w-full" id="invite-role"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MEMBER">Member</SelectItem>{workspace?.currentUserRole === "OWNER" && <SelectItem value="ADMIN">Admin</SelectItem>}</SelectContent></Select>
               <Button disabled={submitting} type="submit">{submitting ? "Creating..." : "Create invite"}</Button>
             </form>
             {inviteUrl && (
-              <div className="mt-4 border-t border-signal-line pt-4"><p className="text-xs font-semibold">Invitation link created</p><p className="mt-1 text-xs text-signal-muted">Share this link only with the invited person. It expires after seven days.</p><div className="mt-3 flex gap-2"><input aria-label="Invitation link" className={`${inputClass()} min-w-0 flex-1 font-mono text-xs`} readOnly value={inviteUrl} /><Button onClick={() => void copyInvite()} type="button" variant="outline">{copied ? <Check /> : <Clipboard />}{copied ? "Copied" : "Copy"}</Button></div></div>
+              <div className="mt-4 border-t border-signal-line pt-4"><p className="text-xs font-semibold">Invitation link created</p><p className="mt-1 text-xs text-signal-muted">Share this link only with the invited person. It expires after seven days.</p><div className="mt-3 flex gap-2"><Input aria-label="Invitation link" className="min-w-0 flex-1 font-mono text-xs" fieldSize="compact" readOnly value={inviteUrl} /><Button onClick={() => void copyInvite()} type="button" variant="outline">{copied ? <Check /> : <Clipboard />}{copied ? "Copied" : "Copy"}</Button></div></div>
             )}
           </section>
         )}

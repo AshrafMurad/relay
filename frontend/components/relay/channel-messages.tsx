@@ -48,7 +48,7 @@ function messageError(caught: unknown, fallback: string) {
 function ReplyPreview({ message }: { message: ClientMessage }) {
   if (!message.parent) return null
   return (
-    <div className="mb-1 flex max-w-[72ch] items-start gap-2 border-l border-signal-line pl-2 text-[11px] leading-4 text-signal-muted">
+    <div className="text-helper mb-1 flex max-w-[72ch] items-start gap-2 border-l border-signal-line pl-2 text-signal-muted">
       <CornerUpLeft className="mt-0.5 size-3 shrink-0" />
       <p className="min-w-0 truncate">
         <span className="font-semibold text-signal-ink/80">{message.parent.authorName}</span>{" "}
@@ -114,20 +114,20 @@ function MessageRow({
     <article className={cn("group relative flex gap-3 px-4 py-2.5 transition-colors hover:bg-signal-surface/60 focus-within:bg-signal-surface/60 sm:px-7", message.delivery === "failed" && "bg-destructive/5")}>
       <Avatar className="mt-0.5 size-8 rounded-lg">
         {message.author.image && <AvatarImage alt="" className="rounded-lg" src={message.author.image} />}
-        <AvatarFallback className="rounded-lg bg-signal-surface-raised text-[9px] font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
+        <AvatarFallback className="text-metadata rounded-lg bg-signal-surface-raised font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2 pr-8">
           <span className="truncate text-xs font-semibold">{message.author.name}</span>
-          <time className="shrink-0 font-mono text-[9px] tabular-nums text-signal-muted" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time>
-          {message.editedAt && !message.deletedAt && <span className="text-[9px] text-signal-muted">edited</span>}
-          {deliveryLabel && <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px]", message.delivery === "failed" ? "border-destructive/30 text-destructive" : "border-signal-cyan/30 text-signal-cyan-ink")}>{deliveryLabel}</span>}
+          <time className="text-metadata shrink-0 text-signal-muted" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time>
+          {message.editedAt && !message.deletedAt && <span className="text-metadata text-signal-muted">edited</span>}
+          {deliveryLabel && <span className={cn("text-metadata rounded-full border px-1.5 py-0.5", message.delivery === "failed" ? "border-destructive/30 text-destructive" : "border-signal-cyan/30 text-signal-cyan-ink")}>{deliveryLabel}</span>}
         </div>
         <ReplyPreview message={message} />
         {editing ? (
           <form className="mt-1 max-w-[72ch]" onSubmit={submitEdit}>
             <Textarea aria-label={`Edit message from ${message.author.name}`} autoFocus className="min-h-20 resize-y bg-signal-surface text-xs leading-5" disabled={saving} maxLength={8_000} onChange={(event) => setEditValue(event.target.value)} value={editValue} />
-            {editError && <p className="mt-1 text-[11px] text-destructive" role="alert">{editError}</p>}
+            {editError && <p className="text-helper mt-1 text-destructive" role="alert">{editError}</p>}
             <div className="mt-2 flex items-center gap-2">
               <Button disabled={saving} size="sm" type="submit">{saving ? "Saving..." : "Save"}</Button>
               <Button onClick={() => { setEditing(false); setEditValue(message.content); setEditError("") }} size="sm" type="button" variant="ghost">Cancel</Button>
@@ -141,7 +141,7 @@ function MessageRow({
         {message.attachments.length > 0 && !message.deletedAt && (
           <div className="mt-2 flex max-w-[72ch] flex-wrap gap-2">
             {message.attachments.map((attachment) => (
-              <a className="inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-surface px-2.5 py-1.5 text-[11px] hover:border-signal-cyan" href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id} rel="noreferrer" target="_blank">
+              <a className="text-helper inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-surface px-2.5 py-1.5 hover:border-signal-cyan" href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id} rel="noreferrer" target="_blank">
                 <Paperclip className="size-3" />
                 <span className="max-w-48 truncate">{attachment.originalFilename}</span>
                 <span className="text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span>
@@ -150,10 +150,10 @@ function MessageRow({
           </div>
         )}
         {message.delivery === "failed" && !archived && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-destructive" role="alert">
+          <div className="text-helper mt-1.5 flex flex-wrap items-center gap-2 text-destructive" role="alert">
             <AlertCircle className="size-3" />
             <span>{message.failureMessage || "Message was not sent."}</span>
-            <Button className="h-6 px-2 text-[10px]" onClick={() => onRetry(message)} type="button" variant="outline"><RotateCcw /> Retry</Button>
+            <Button onClick={() => onRetry(message)} size="xs" type="button" variant="outline"><RotateCcw /> Retry</Button>
           </div>
         )}
         {message.reactions.length > 0 && (
@@ -161,7 +161,7 @@ function MessageRow({
             {message.reactions.map((reaction) => (
               <button
                 aria-pressed={reaction.reactedByMe}
-                className={cn("rounded-full border px-2 py-0.5 text-[11px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30", reaction.reactedByMe ? "border-signal-cyan/40 bg-signal-cyan/10 text-signal-cyan-ink" : "border-signal-line bg-signal-surface text-signal-muted hover:border-signal-cyan/40 hover:text-signal-ink")}
+                className={cn("text-helper rounded-full border px-2 py-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30", reaction.reactedByMe ? "border-signal-cyan/40 bg-signal-cyan/10 text-signal-cyan-ink" : "border-signal-line bg-signal-surface text-signal-muted hover:border-signal-cyan/40 hover:text-signal-ink")}
                 disabled={!canReact}
                 key={reaction.emoji}
                 onClick={() => onReact(message, reaction.emoji)}
@@ -580,7 +580,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
               </div>
             ) : messages.map((message, index) => (
               <div key={`${message.id}:${archived}`}>
-                {isFirstUnread(message, index) && <div className="my-2 flex items-center gap-3 px-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />Unread<span className="h-px flex-1 bg-signal-amber/35" /></div>}
+                {isFirstUnread(message, index) && <div className="text-metadata my-2 flex items-center gap-3 px-5 font-semibold uppercase tracking-[0.16em] text-signal-amber"><span className="h-px flex-1 bg-signal-amber/35" />Unread<span className="h-px flex-1 bg-signal-amber/35" /></div>}
                 <MessageRow archived={archived} currentUserId={user.id} message={message} onDelete={deleteMessage} onEdit={editMessage} onReact={reactToMessage} onReply={(selected) => setReplyingTo(selected)} onRetry={sendMessage} />
               </div>
             ))}
@@ -594,14 +594,14 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
         ) : (
           <div className="mx-auto max-w-6xl">
             {replyingTo && (
-              <div className="flex items-center gap-2 rounded-t-lg border border-b-0 border-signal-line bg-signal-surface-raised px-3 py-2 text-[11px]">
+              <div className="text-helper flex items-center gap-2 rounded-t-lg border border-b-0 border-signal-line bg-signal-surface-raised px-3 py-2">
                 <CornerUpLeft className="size-3 text-signal-muted" />
                 <p className="min-w-0 flex-1 truncate"><span className="font-semibold">Replying to {replyingTo.author.name}</span><span className="text-signal-muted"> · {replyingTo.deletedAt ? "Message deleted" : replyingTo.content}</span></p>
                 <Button aria-label="Cancel reply" onClick={() => setReplyingTo(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
               </div>
             )}
             <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
-              {typingUsers.length > 0 && <p className="border-b border-signal-line px-3 py-1.5 text-[11px] text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
+              {typingUsers.length > 0 && <p className="text-helper border-b border-signal-line px-3 py-1.5 text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
               <Textarea
                 aria-label={`Message ${title}`}
                 aria-describedby={composerError ? "composer-error" : undefined}
@@ -616,7 +616,7 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
               {pendingAttachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 border-t border-signal-line px-3 py-2">
                   {pendingAttachments.map((attachment) => (
-                    <span className="inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1 text-[11px]" key={attachment.id}>
+                    <span className="text-helper inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1" key={attachment.id}>
                       <Paperclip className="size-3" />
                       <span className="max-w-40 truncate">{attachment.originalFilename}</span>
                       <button className="text-signal-muted hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button">Remove</button>
@@ -625,17 +625,17 @@ export function ChannelMessages({ onActivity, onReadState, target, user }: { onA
                 </div>
               )}
               <div className="flex min-h-9 items-center gap-3 border-t border-signal-line px-2.5">
-                <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[10px] text-signal-muted hover:text-signal-ink", uploadingAttachment && "pointer-events-none opacity-50")}> 
+                <label className={cn("text-metadata inline-flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-signal-muted hover:text-signal-ink", uploadingAttachment && "pointer-events-none opacity-50")}>
                   <Paperclip className="size-3" /> {uploadingAttachment ? "Uploading" : "Attach"}
                   <input className="sr-only" disabled={uploadingAttachment || pendingAttachments.length >= 5} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.currentTarget.value = "" }} type="file" />
                 </label>
-                <span className={cn("font-mono text-[9px] tabular-nums text-signal-muted", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
-                <span className="hidden text-[9px] text-signal-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
-                <span className={cn("inline-flex items-center gap-1 text-[9px]", socketState === "connected" ? "text-signal-cyan-ink" : "text-signal-muted")} aria-live="polite"><span className={cn("size-1.5 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} />{connectionCopy}</span>
+                <span className={cn("text-metadata text-signal-muted", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
+                <span className="text-metadata hidden text-signal-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
+                <span className={cn("text-metadata inline-flex items-center gap-1", socketState === "connected" ? "text-signal-cyan-ink" : "text-signal-muted")} aria-live="polite"><span className={cn("size-1.5 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} />{connectionCopy}</span>
                 <Button aria-label="Send message" className="ml-auto size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
               </div>
             </div>
-            {composerError && <p className="mt-1.5 text-[11px] text-destructive" id="composer-error" role="alert">{composerError}</p>}
+            {composerError && <p className="text-helper mt-1.5 text-destructive" id="composer-error" role="alert">{composerError}</p>}
           </div>
         )}
       </div>
