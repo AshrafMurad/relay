@@ -1,7 +1,9 @@
 import type { Metadata } from "next"
 import { Archivo, Geist_Mono } from "next/font/google"
+import Script from "next/script"
 
 import "./globals.css"
+import { THEME_INIT_SCRIPT } from "@/lib/theme"
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -25,7 +27,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`${archivo.variable} ${geistMono.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <Script id="relay-theme" strategy="beforeInteractive">{THEME_INIT_SCRIPT}</Script>
+      </body>
     </html>
   )
 }

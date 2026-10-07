@@ -50,6 +50,13 @@
   --color-signal-cyan: var(--signal-cyan);
   --color-signal-cyan-ink: var(--signal-cyan-ink);
   --color-signal-green: var(--signal-green);
+  --text-display: clamp(3rem, 7vw, 6rem);
+  --text-page-title: clamp(2.25rem, 4.5vw, 3.25rem);
+  --text-section-title: 0.875rem;
+  --text-body: 0.875rem;
+  --text-label: 0.8125rem;
+  --text-helper: 0.75rem;
+  --text-metadata: 0.625rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -59,93 +66,172 @@
 
 :root {
   --radius: 0.5rem;
-  --background: #f4f1e8;
-  --foreground: #192326;
-  --card: #fbfaf5;
-  --card-foreground: #192326;
-  --popover: #fffdf7;
-  --popover-foreground: #192326;
-  --primary: #f2a23a;
-  --primary-foreground: #142126;
-  --secondary: #e8e7df;
-  --secondary-foreground: #243237;
-  --muted: #e8e7df;
-  --muted-foreground: #5f6b6e;
-  --accent: #dfe9e7;
-  --accent-foreground: #1d4147;
+  --background: #edf3f4;
+  --foreground: #102027;
+  --card: #f8fbfb;
+  --card-foreground: #102027;
+  --popover: #ffffff;
+  --popover-foreground: #102027;
+  --primary: #df850d;
+  --primary-foreground: #071116;
+  --secondary: #dce8ea;
+  --secondary-foreground: #14272f;
+  --muted: #dce8ea;
+  --muted-foreground: #516871;
+  --accent: #cce7ea;
+  --accent-foreground: #123b42;
   --destructive: #b83f37;
-  --border: #c8cdc5;
-  --input: #bfc7c2;
-  --ring: #318994;
-  --sidebar: #16252b;
-  --sidebar-foreground: #e9e6dc;
-  --sidebar-primary: #58b9c4;
-  --sidebar-primary-foreground: #102126;
-  --sidebar-accent: #21343b;
+  --border: #b5c9ce;
+  --input: #9fb8bf;
+  --ring: #007f8c;
+  --sidebar: #071116;
+  --sidebar-foreground: #eef4f5;
+  --sidebar-primary: #00d8e6;
+  --sidebar-primary-foreground: #041014;
+  --sidebar-accent: #13252e;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgb(255 255 255 / 10%);
-  --sidebar-ring: #f2a23a;
-  --signal-carbon: #0d171b;
-  --signal-panel: #16252b;
-  --signal-panel-raised: #21343b;
-  --signal-panel-text: #e9e6dc;
-  --signal-panel-muted: #a9b5b5;
-  --signal-paper: #f4f1e8;
-  --signal-surface: #fbfaf5;
-  --signal-surface-raised: #e8e7df;
-  --signal-ink: #192326;
-  --signal-muted: #5f6b6e;
-  --signal-line: #c8cdc5;
-  --signal-amber: #f2a23a;
-  --signal-amber-ink: #87510d;
-  --signal-cyan: #3d98a3;
-  --signal-cyan-ink: #1f6972;
-  --signal-green: #3f795b;
+  --sidebar-ring: #ffa42e;
+  --signal-carbon: #050c10;
+  --signal-panel: #071116;
+  --signal-panel-raised: #13252e;
+  --signal-panel-text: #eef4f5;
+  --signal-panel-muted: #a9b5bf;
+  --signal-paper: #edf3f4;
+  --signal-surface: #f8fbfb;
+  --signal-surface-raised: #dce8ea;
+  --signal-ink: #102027;
+  --signal-muted: #516871;
+  --signal-line: #b5c9ce;
+  --signal-amber: #df850d;
+  --signal-amber-ink: #925000;
+  --signal-cyan: #007f8c;
+  --signal-cyan-ink: #006873;
+  --signal-green: #287453;
 }
 
 .dark {
-  --background: #0b1216;
-  --foreground: #e5e9e7;
-  --card: #111a1e;
-  --card-foreground: #e5e9e7;
-  --popover: #111a1e;
-  --popover-foreground: #e5e9e7;
-  --primary: #f2a23a;
-  --primary-foreground: #142126;
-  --secondary: #18252a;
-  --secondary-foreground: #e5e9e7;
-  --muted: #18252a;
-  --muted-foreground: #8c9a9d;
-  --accent: #1b292f;
-  --accent-foreground: #eef7f6;
+  --background: #050c10;
+  --foreground: #eef4f5;
+  --card: #0b141a;
+  --card-foreground: #eef4f5;
+  --popover: #0d1a21;
+  --popover-foreground: #eef4f5;
+  --primary: #ffa42e;
+  --primary-foreground: #071116;
+  --secondary: #13252e;
+  --secondary-foreground: #eef4f5;
+  --muted: #13252e;
+  --muted-foreground: #a9b5bf;
+  --accent: #17303a;
+  --accent-foreground: #f4fbfc;
   --destructive: #e07068;
-  --border: #202f35;
-  --input: #2a3b42;
-  --ring: #58b9c4;
-  --sidebar: #0d1519;
-  --sidebar-foreground: #e5e9e7;
-  --sidebar-primary: #58b9c4;
-  --sidebar-primary-foreground: #102126;
-  --sidebar-accent: #18252a;
+  --border: #28404a;
+  --input: #28404a;
+  --ring: #00d8e6;
+  --sidebar: #071116;
+  --sidebar-foreground: #eef4f5;
+  --sidebar-primary: #00f5ff;
+  --sidebar-primary-foreground: #041014;
+  --sidebar-accent: #13252e;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgb(255 255 255 / 10%);
-  --sidebar-ring: #f2a23a;
-  --signal-carbon: #080e12;
-  --signal-panel: #0d1519;
-  --signal-panel-raised: #18252a;
-  --signal-panel-text: #e5e9e7;
-  --signal-panel-muted: #8c9a9d;
-  --signal-paper: #0b1216;
-  --signal-surface: #111a1e;
-  --signal-surface-raised: #18252a;
-  --signal-ink: #e5e9e7;
-  --signal-muted: #819095;
-  --signal-line: #202f35;
-  --signal-amber: #f5a137;
-  --signal-amber-ink: #f7b55d;
-  --signal-cyan: #55c2c9;
-  --signal-cyan-ink: #78d0d5;
-  --signal-green: #55c2c9;
+  --sidebar-ring: #ffa42e;
+  --signal-carbon: #050c10;
+  --signal-panel: #071116;
+  --signal-panel-raised: #13252e;
+  --signal-panel-text: #eef4f5;
+  --signal-panel-muted: #a9b5bf;
+  --signal-paper: #050c10;
+  --signal-surface: #0b141a;
+  --signal-surface-raised: #13252e;
+  --signal-ink: #eef4f5;
+  --signal-muted: #a9b5bf;
+  --signal-line: #28404a;
+  --signal-amber: #ffa42e;
+  --signal-amber-ink: #ffc06c;
+  --signal-cyan: #00f5ff;
+  --signal-cyan-ink: #72f8ff;
+  --signal-green: #58d6a1;
+}
+
+@layer components {
+  .text-display {
+    font-size: var(--text-display);
+    font-weight: 600;
+    line-height: 0.96;
+    letter-spacing: -0.035em;
+  }
+
+  .text-page-title {
+    font-size: var(--text-page-title);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .text-section-title {
+    font-size: var(--text-section-title);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .text-body {
+    font-size: var(--text-body);
+    line-height: 1.625;
+  }
+
+  .text-label {
+    font-size: var(--text-label);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .text-helper {
+    font-size: var(--text-helper);
+    line-height: 1.5;
+  }
+
+  .text-metadata {
+    font-family: var(--font-geist-mono);
+    font-size: var(--text-metadata);
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .public-frame {
+    min-height: 100dvh;
+    overflow-y: auto;
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  .public-container {
+    width: 100%;
+    max-width: 82.5rem;
+    min-height: 100%;
+    margin-inline: auto;
+    padding: 0.75rem;
+  }
+
+  .panel-prominent {
+    border: 1px solid color-mix(in srgb, var(--border), var(--ring) 18%);
+    border-radius: var(--radius-2xl);
+    background: var(--card);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.24);
+  }
+
+  @media (min-width: 40rem) {
+    .public-container {
+      padding: 1.25rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .public-container {
+      padding: 1rem;
+    }
+  }
 }
 
 @layer base {

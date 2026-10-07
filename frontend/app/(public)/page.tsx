@@ -1,31 +1,18 @@
 import Link from "next/link"
 import { ArrowRight, CheckCircle2, Clock3, MessageSquare, RadioTower, ShieldCheck } from "lucide-react"
 
-import { BrandLogo } from "@/components/relay/brand-logo"
 import { Button } from "@/components/ui/button"
 
 export default function Home() {
   return (
-    <main className="h-dvh overflow-y-auto bg-signal-carbon text-signal-panel-text">
-      <section className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-4 py-4 md:px-6 lg:px-8 lg:py-6">
-        <nav className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-signal-panel px-4 py-3 md:px-5" aria-label="Public navigation">
-          <Link className="flex w-32 items-center" href="/" aria-label="Relay home">
-            <BrandLogo priority />
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button nativeButton={false} render={<Link href="/login" />} size="sm" variant="ghost">Log in</Button>
-            <Button nativeButton={false} render={<Link href="/signup" />} size="sm">Sign up</Button>
-          </div>
-        </nav>
-
-        <div className="grid flex-1 gap-5 py-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] lg:items-stretch">
+    <main className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] lg:items-stretch">
           <section className="flex flex-col justify-between rounded-2xl border border-white/10 bg-signal-panel p-5 md:p-8">
             <div className="max-w-2xl py-6 md:py-10 lg:py-12">
               <div className="mb-7 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-signal-cyan">
                 <RadioTower className="size-3.5" aria-hidden="true" />
                 Signal clear for small remote teams
               </div>
-              <h1 className="max-w-[12ch] text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-signal-panel-text md:text-7xl xl:text-8xl">
+              <h1 className="text-display max-w-[12ch] text-signal-panel-text">
                 Work chat with memory.
               </h1>
               <p className="mt-6 max-w-xl text-base leading-7 text-signal-panel-muted md:text-lg">
@@ -101,8 +88,6 @@ export default function Home() {
               </div>
             </div>
           </section>
-        </div>
-      </section>
     </main>
   )
 }

@@ -1,10 +1,12 @@
+import { cache } from "react"
 import { cookies } from "next/headers"
 
 import { API_BASE_URL } from "@/lib/api/client"
+import type { AuthUserDTO } from "@/lib/api/contracts"
 
-export async function hasActiveSession() {
+export const getCurrentSessionUser = cache(async (): Promise<AuthUserDTO | null> => {
   const cookieHeader = (await cookies()).toString()
-  if (!cookieHeader) return false
+  if (!cookieHeader) return null
 
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -12,8 +14,14 @@ export async function hasActiveSession() {
       headers: { cookie: cookieHeader },
     })
 
-    return response.ok
+    if (!response.ok) return null
+    const result = await response.json() as { user: AuthUserDTO }
+    return result.user
   } catch {
-    return false
+    return null
   }
+})
+
+export async function hasActiveSession() {
+  return Boolean(await getCurrentSessionUser())
 }
