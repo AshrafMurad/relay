@@ -9,13 +9,15 @@ import { requireAuth } from "../../middleware/auth.js";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, sessionCookieOptions, signIn, signOut, signUp, toAuthUserDTO, verifyEmail, SESSION_COOKIE_NAME } from "./auth.service.js";
 
 const signUpSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(120),
-  password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+  email: z.string().email("Enter a valid email address."),
+  name: z.string().min(1, "Name is required.").max(120, "Name must be 120 characters or fewer."),
+  password: z.string()
+    .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`)
+    .max(PASSWORD_MAX_LENGTH, `Password must be ${PASSWORD_MAX_LENGTH} characters or fewer.`),
 });
 
 const signInSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email("Enter a valid email address."),
   password: z.string().min(1),
 });
 
@@ -23,7 +25,7 @@ const verifyEmailSchema = z.object({ token: z.string().min(16) });
 
 function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
   const parsed = schema.safeParse(body);
-  if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "Request body is invalid.");
+  if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Request body is invalid.");
   return parsed.data;
 }
 

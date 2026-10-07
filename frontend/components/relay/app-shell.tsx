@@ -24,6 +24,7 @@ import { ChannelMessages } from "@/components/relay/channel-messages"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -286,10 +287,12 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
             <span className="truncate">{workspace.name}</span><ChevronDown className="ml-auto size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-60">
-            <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
-            {workspaces.map((item) => (
-              <DropdownMenuItem key={item.id} onClick={() => setNavigationOpen(false)} render={<Link href={`/app/${item.slug}`} />}>{item.name}</DropdownMenuItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
+              {workspaces.map((item) => (
+                <DropdownMenuItem key={item.id} onClick={() => setNavigationOpen(false)} render={<Link href={`/app/${item.slug}`} />}>{item.name}</DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -422,12 +425,14 @@ export function RelayAppShell({ children, workspaceSlug }: { children: ReactNode
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button aria-label="Channel options" size="icon-sm" type="button" variant="ghost" />}><MoreHorizontal /></DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel>Channel</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={openEdit}><Pencil /> Edit details</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {selectedChannel.archivedAt
-                    ? <DropdownMenuItem onClick={() => void changeArchiveState("restore")}><RotateCcw /> Restore channel</DropdownMenuItem>
-                    : <DropdownMenuItem disabled={selectedChannel.name === "general"} onClick={() => void changeArchiveState("archive")} variant="destructive"><Archive /> Archive channel</DropdownMenuItem>}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Channel</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={openEdit}><Pencil /> Edit details</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {selectedChannel.archivedAt
+                      ? <DropdownMenuItem onClick={() => void changeArchiveState("restore")}><RotateCcw /> Restore channel</DropdownMenuItem>
+                      : <DropdownMenuItem disabled={selectedChannel.name === "general"} onClick={() => void changeArchiveState("archive")} variant="destructive"><Archive /> Archive channel</DropdownMenuItem>}
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

@@ -110,7 +110,8 @@ export function SprintOneApp() {
 
   async function handleCreateWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     try {
       const result = await apiRequest<{ workspace: WorkspaceDTO }>("/workspaces", {
         method: "POST",
@@ -119,7 +120,7 @@ export function SprintOneApp() {
       setWorkspaces((current) => [...current, result.workspace])
       setActiveWorkspaceId(result.workspace.id)
       setStatus({ tone: "success", message: "Workspace created with you as Owner." })
-      event.currentTarget.reset()
+      formElement.reset()
     } catch (error) {
       setStatus(errorStatus(error))
     }
@@ -128,7 +129,8 @@ export function SprintOneApp() {
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!activeWorkspace) return
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     try {
       const result = await apiRequest<{ invitation: WorkspaceInvitationDTO; token: string }>(`/workspaces/${activeWorkspace.id}/invitations`, {
         method: "POST",
@@ -136,7 +138,7 @@ export function SprintOneApp() {
       })
       setInvitations((current) => [result.invitation, ...current])
       setStatus({ tone: "success", message: `Invitation created. Share token: ${result.token}` })
-      event.currentTarget.reset()
+      formElement.reset()
     } catch (error) {
       setStatus(errorStatus(error))
     }
@@ -144,7 +146,8 @@ export function SprintOneApp() {
 
   async function handleAcceptInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     try {
       const result = await apiRequest<{ workspace: WorkspaceDTO; invitation: WorkspaceInvitationDTO }>("/workspaces/invitations/accept", {
         method: "POST",
@@ -153,7 +156,7 @@ export function SprintOneApp() {
       setWorkspaces((current) => [...current.filter((workspace) => workspace.id !== result.workspace.id), result.workspace])
       setActiveWorkspaceId(result.workspace.id)
       setStatus({ tone: "success", message: "Invitation accepted. Workspace access granted." })
-      event.currentTarget.reset()
+      formElement.reset()
     } catch (error) {
       setStatus(errorStatus(error))
     }

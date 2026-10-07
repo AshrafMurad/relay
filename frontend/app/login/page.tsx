@@ -1,5 +1,10 @@
-import { AuthPage } from "@/components/relay/auth-page"
+import { redirect } from "next/navigation"
 
-export default function LoginPage() {
+import { AuthPage } from "@/components/relay/auth-page"
+import { hasActiveSession } from "@/lib/auth/session"
+
+export default async function LoginPage() {
+  if (await hasActiveSession()) redirect("/workspace")
+
   return <AuthPage mode="login" />
 }

@@ -26,6 +26,16 @@ function statusFromError(error: unknown): Status {
   return { tone: "error", message: "Something went wrong." }
 }
 
+function fieldErrorFromError(error: unknown): FieldErrors | null {
+  if (!(error instanceof ApiClientError) || error.code !== "VALIDATION_ERROR") return null
+
+  const message = error.message.toLowerCase()
+  if (message.includes("email")) return { email: error.message }
+  if (message.includes("password")) return { password: error.message }
+  if (message.includes("name")) return { name: error.message }
+  return null
+}
+
 function StatusMessage({ status }: { status: Status }) {
   if (!status) return null
   return (
@@ -107,7 +117,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       })
       router.push("/workspace")
     } catch (error) {
-      setStatus(statusFromError(error))
+      const apiFieldErrors = fieldErrorFromError(error)
+      if (apiFieldErrors) setFieldErrors(apiFieldErrors)
+      else setStatus(statusFromError(error))
     } finally {
       setIsSubmitting(false)
     }
@@ -164,8 +176,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               <span className="grid size-10 place-items-center rounded-lg bg-signal-carbon text-sm font-bold text-signal-panel-text">R</span>
             </div>
 
-            <div className="mt-5"><StatusMessage status={status} /></div>
-
             <form className="mt-5 grid gap-4" noValidate onSubmit={handleSubmit}>
               {isSignup && <Field error={fieldErrors.name} label="Name"><input aria-invalid={Boolean(fieldErrors.name)} className={inputClass()} name="name" placeholder="Mina Chen" /></Field>}
               <Field error={fieldErrors.email} label="Email"><input aria-invalid={Boolean(fieldErrors.email)} className={inputClass()} inputMode="email" name="email" placeholder="you@team.com" /></Field>
@@ -188,6 +198,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   </button>
                 </div>
               </Field>
+              <StatusMessage status={status} />
               <Button className="mt-1 h-10" disabled={isSubmitting} type="submit">
                 {isSignup ? "Create account" : "Enter workspace"}
                 <ArrowRight className="size-4" aria-hidden="true" />
