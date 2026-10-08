@@ -479,7 +479,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
 
   const navigation = (
     <div className="theme-navigation flex h-full min-h-0 flex-col bg-signal-panel">
-      <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
+      <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-sidebar-border px-3 pr-12 lg:pr-3">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button className="h-11 min-w-0 flex-1 justify-start px-2 text-signal-panel-text hover:bg-sidebar-accent/80" variant="ghost" />}>
             <Avatar className="size-8 shrink-0 rounded-md border border-sidebar-border bg-signal-carbon"><AvatarPicture className="rounded-md object-cover" src={targetWorkspace?.imageUrl ?? workspace.imageUrl} /><AvatarFallback className="text-metadata rounded-md bg-signal-carbon font-bold text-signal-amber">{initials(targetWorkspace?.name ?? workspace.name)}</AvatarFallback></Avatar>

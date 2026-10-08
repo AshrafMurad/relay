@@ -222,12 +222,12 @@ function MessageRow({
   }
 
   return (
-    <article className={cn("group relative flex gap-3 px-4 transition-colors duration-150 hover:bg-signal-surface/55 focus-within:bg-signal-surface/55 sm:px-7", grouped ? "py-0.5" : "pb-1.5 pt-3.5", message.delivery === "failed" && "bg-destructive/5")}>
+    <article className={cn("group relative flex gap-3 px-4 transition-colors duration-150 hover:bg-signal-surface/55 focus-within:bg-signal-surface/55 sm:px-7", grouped ? "py-2 sm:py-0.5" : "pb-3 pt-5 sm:pb-1.5 sm:pt-3.5", message.delivery === "failed" && "bg-destructive/5")}>
         {grouped ? <time className="text-metadata mt-1.5 w-8 shrink-0 text-center text-signal-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time> : <Avatar className="mt-0.5 size-8 rounded-lg">
         {mediaUrl(message.author.image) && <AvatarImage alt="" className="rounded-lg" src={mediaUrl(message.author.image)!} />}
         <AvatarFallback className="text-metadata rounded-lg bg-signal-surface-raised font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
       </Avatar>}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pr-12 sm:pr-0">
         {!grouped && <div className="flex min-w-0 items-baseline gap-2 pr-8">
           <span className="truncate text-[13px] font-semibold leading-5">{message.author.name}</span>
           <time className="text-metadata shrink-0 text-signal-muted" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time>
@@ -276,11 +276,11 @@ function MessageRow({
           </div>
         )}
       </div>
-      {canAct && <div aria-label={`Actions for message from ${message.author.name}`} className="absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-md border border-signal-line bg-signal-paper p-1 shadow-sm opacity-100 transition-opacity duration-150 sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100" role="toolbar">
+      {canAct && <div aria-label={`Actions for message from ${message.author.name}`} className="absolute right-4 top-2 z-10 flex items-center gap-0.5 rounded-md border border-signal-line bg-signal-paper p-1 shadow-sm opacity-100 transition-opacity duration-150 sm:pointer-events-none sm:-top-4 sm:right-3 sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100" role="toolbar">
         {canReact && <div className="hidden items-center gap-0.5 sm:flex">{QUICK_REACTIONS.map((emoji) => <button aria-label={`React with ${emoji}`} className="grid size-8 place-items-center rounded-md text-sm leading-none transition-colors duration-150 hover:bg-signal-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/30" key={emoji} onClick={() => onReact(message, emoji)} type="button">{emoji}</button>)}</div>}
         <Button aria-label="Reply to message" className="hidden sm:inline-flex" onClick={() => onReply(message)} size="icon" type="button" variant="ghost"><CornerUpLeft /></Button>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button aria-label={`More actions for message from ${message.author.name}`} size="icon" type="button" variant="ghost" />}><MoreHorizontal /></DropdownMenuTrigger>
+          <DropdownMenuTrigger render={<Button aria-label={`More actions for message from ${message.author.name}`} className="size-10 sm:size-8" size="icon" type="button" variant="ghost" />}><MoreHorizontal /></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-36">
             <DropdownMenuItem onClick={() => onReply(message)}><CornerUpLeft /> Reply</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onReact(message, "👍")}><SmilePlus /> React 👍</DropdownMenuItem>

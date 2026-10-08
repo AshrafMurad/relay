@@ -58,7 +58,7 @@ export function createApp(
       },
     }),
   );
-  app.use(helmet());
+  app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
   app.use(
     cors({
       origin: environment.WEB_ORIGIN,
