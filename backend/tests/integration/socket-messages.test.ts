@@ -231,7 +231,9 @@ describe("real-time channel messaging", () => {
     try {
       await joinDm(firstTab);
       await joinDm(secondTab);
+      const presenceSnapshot = new Promise<unknown>((resolve) => receiver.once("presence:snapshot", resolve));
       await joinDm(receiver);
+      await expect(presenceSnapshot).resolves.toMatchObject({ workspaceId, onlineUserIds: expect.arrayContaining([userIds[0], userIds[1]]) });
       const typingStarted = new Promise<unknown>((resolve) => receiver.once("typing:update", resolve));
       firstTab.emit("typing:start", { workspaceId, conversation: { type: "dm", id: directConversationId } });
       await expect(typingStarted).resolves.toMatchObject({ conversation: { type: "dm", id: directConversationId }, user: { id: userIds[0] }, typing: true });
@@ -290,16 +292,16 @@ describe("real-time channel messaging", () => {
   });
 
   it("stops delivering conversation broadcasts after membership removal", async () => {
-    const { httpServer, io, url } = await listen();
+    const { httpServer, io, url } = await listen(true);
     const sender = await connect(url, 0);
     const removedMember = await connect(url, 1);
     try {
       await expect(join(sender)).resolves.toEqual({ ok: true });
       await expect(join(removedMember)).resolves.toEqual({ ok: true });
-      await database.prisma.workspaceMember.update({
-        where: { workspaceId_userId: { workspaceId, userId: userIds[1]! } },
-        data: { status: "REMOVED", removedAt: new Date(), removedById: userIds[0] },
-      });
+      const membership = await database.prisma.workspaceMember.findUniqueOrThrow({ where: { workspaceId_userId: { workspaceId, userId: userIds[1]! } } });
+      const disconnected = new Promise<void>((resolve) => removedMember.once("disconnect", () => resolve()));
+      await request(httpServer).delete(`/api/workspaces/${workspaceId}/members/${membership.id}`).set("Cookie", cookie(0)).expect(204);
+      await expect(disconnected).resolves.toBeUndefined();
       const received: unknown[] = [];
       removedMember.on("message:new", (event) => received.push(event));
       sender.emit("message:send", { operationId: randomUUID(), workspaceId, conversation: { type: "channel", id: channelId }, content: "private after removal" });

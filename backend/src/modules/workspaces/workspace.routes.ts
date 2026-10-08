@@ -11,12 +11,15 @@ import { createChannelSchema } from "../channels/channel.contracts.js";
 import { createChannel, listChannels } from "../channels/channel.service.js";
 import { MAX_IDENTITY_IMAGE_BYTES, updateWorkspaceImage } from "../identity-images/identity-image.service.js";
 import { getWorkspaceSync, syncQuerySchema } from "../sync/sync.service.js";
-import { acceptInvitation, createInvitation, createWorkspace, getInvitationPreview, getWorkspace, listInvitations, listMembers, listWorkspaces, revokeInvitation, toWorkspaceDTO } from "./workspace.service.js";
+import type { RealtimeEventBus } from "../../realtime/realtime-events.js";
+import { acceptInvitation, createInvitation, createWorkspace, getInvitationPreview, getWorkspace, listInvitations, listMembers, listWorkspaces, removeMember, revokeInvitation, toWorkspaceDTO, updateMemberRole, updateWorkspace } from "./workspace.service.js";
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(2).max(120),
   imageUrl: z.string().url().optional(),
 });
+const updateWorkspaceSchema = z.object({ name: z.string().min(2).max(120) });
+const updateMemberRoleSchema = z.object({ role: z.enum([WorkspaceRole.ADMIN, WorkspaceRole.MEMBER]) });
 
 const createInvitationSchema = z.object({
   email: z.string().email(),
@@ -26,6 +29,7 @@ const createInvitationSchema = z.object({
 const acceptInvitationSchema = z.object({ token: z.string().min(16) });
 const paramsSchema = z.object({ workspaceId: z.string().uuid() });
 const invitationParamsSchema = z.object({ workspaceId: z.string().uuid(), invitationId: z.string().uuid() });
+const memberParamsSchema = z.object({ workspaceId: z.string().uuid(), memberId: z.string().uuid() });
 const tokenParamsSchema = z.object({ token: z.string().min(16) });
 
 function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
@@ -34,7 +38,7 @@ function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
   return parsed.data;
 }
 
-export function createWorkspaceRouter(prisma: PrismaClient, uploadDir: string) {
+export function createWorkspaceRouter(prisma: PrismaClient, uploadDir: string, realtime?: RealtimeEventBus) {
   const router = Router();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IDENTITY_IMAGE_BYTES, files: 1 } });
 
@@ -60,6 +64,13 @@ export function createWorkspaceRouter(prisma: PrismaClient, uploadDir: string) {
   router.get("/:workspaceId", asyncHandler(async (request, response) => {
     const { workspaceId } = parse(paramsSchema, request.params);
     const workspace = await getWorkspace(prisma, workspaceId, request.authUser!.id);
+    response.json({ workspace });
+  }));
+
+  router.patch("/:workspaceId", asyncHandler(async (request, response) => {
+    const { workspaceId } = parse(paramsSchema, request.params);
+    const input = parse(updateWorkspaceSchema, request.body);
+    const workspace = await updateWorkspace(prisma, workspaceId, request.authUser!.id, input);
     response.json({ workspace });
   }));
 
@@ -94,6 +105,20 @@ export function createWorkspaceRouter(prisma: PrismaClient, uploadDir: string) {
     const { workspaceId } = parse(paramsSchema, request.params);
     const members = await listMembers(prisma, workspaceId, request.authUser!.id);
     response.json({ members });
+  }));
+
+  router.patch("/:workspaceId/members/:memberId", asyncHandler(async (request, response) => {
+    const { workspaceId, memberId } = parse(memberParamsSchema, request.params);
+    const { role } = parse(updateMemberRoleSchema, request.body);
+    const member = await updateMemberRole(prisma, workspaceId, memberId, request.authUser!.id, role);
+    response.json({ member });
+  }));
+
+  router.delete("/:workspaceId/members/:memberId", asyncHandler(async (request, response) => {
+    const { workspaceId, memberId } = parse(memberParamsSchema, request.params);
+    const removed = await removeMember(prisma, workspaceId, memberId, request.authUser!.id);
+    realtime?.publish({ type: "workspace:member:removed", workspaceId, userId: removed.userId });
+    response.status(204).send();
   }));
 
   router.get("/:workspaceId/invitations", asyncHandler(async (request, response) => {

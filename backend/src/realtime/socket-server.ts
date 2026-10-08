@@ -10,6 +10,7 @@ import type {
   SocketData,
 } from "../contracts/socket.js";
 import type { Logger } from "../lib/logger.js";
+import type { RedisConnection } from "../lib/redis.js";
 import { ApiError } from "../lib/api-error.js";
 import { getSessionByToken, SESSION_COOKIE_NAME } from "../modules/auth/auth.service.js";
 import { requireAccessibleDirectConversation } from "../modules/direct-conversations/direct-conversation.service.js";
@@ -71,6 +72,7 @@ export function createSocketServer(
   logger: Logger,
   prisma?: PrismaClient,
   realtime?: RealtimeEventBus,
+  redis?: RedisConnection,
 ) {
   const allowJoin = createWindowLimiter(60, 60_000);
   const allowShortMessageSend = createWindowLimiter(30, 10_000);
@@ -96,6 +98,33 @@ export function createSocketServer(
       callback(null, request.headers.origin === environment.WEB_ORIGIN);
     },
   });
+
+  redis?.subscribePresence((event) => {
+    io.to(workspaceRoom(event.workspaceId)).emit("presence:update", { userId: event.userId, status: event.status });
+  });
+
+  async function disconnectWorkspaceUser(workspaceId: string, userId: string) {
+    const sockets = await io.in(workspaceRoom(workspaceId)).fetchSockets();
+    for (const candidate of sockets) {
+      if (candidate.data.userId === userId) candidate.disconnect(true);
+    }
+  }
+
+  redis?.subscribeWorkspaceRevocation((workspaceId, userId) => {
+    void disconnectWorkspaceUser(workspaceId, userId).catch((error) => logger.warn({ err: error }, "Workspace socket revocation failed"));
+  });
+
+  async function publishPresence(workspaceId: string, userId: string, status: "online" | "offline") {
+    if (redis) {
+      try {
+        await redis.publishPresence({ workspaceId, userId, status });
+        return;
+      } catch (error) {
+        logger.warn({ err: error }, "Redis presence publication failed");
+      }
+    }
+    io.to(workspaceRoom(workspaceId)).emit("presence:update", { userId, status });
+  }
 
   async function authorizedConversationSockets(conversation: { type: "channel" | "dm"; id: string; workspaceId: string; room: string }) {
     const sockets = await io.in(conversation.room).fetchSockets();
@@ -124,6 +153,17 @@ export function createSocketServer(
 
   realtime?.subscribe(async (event) => {
     try {
+      if (event.type === "workspace:member:removed") {
+        await disconnectWorkspaceUser(event.workspaceId, event.userId);
+        if (redis) {
+          try {
+            await redis.publishWorkspaceRevocation(event.workspaceId, event.userId);
+          } catch (error) {
+            logger.warn({ err: error }, "Redis workspace revocation publication failed");
+          }
+        }
+        return;
+      }
       const recipients = await authorizedConversationSockets(event.conversation);
       for (const recipient of recipients) {
         if (event.type === "reaction:update") {
@@ -171,7 +211,12 @@ export function createSocketServer(
       const sockets = activeSocketsByUser.get(socket.data.userId) ?? new Set<string>();
       sockets.add(socket.id);
       activeSocketsByUser.set(socket.data.userId, sockets);
+      if (redis) void redis.markPresenceOnline(socket.data.userId, socket.id).catch((error) => logger.warn({ err: error }, "Redis presence registration failed"));
     }
+    const presenceRefreshTimer = redis && socket.data.userId ? setInterval(() => {
+      void redis.refreshPresence(socket.data.userId!, socket.id).catch((error) => logger.warn({ err: error }, "Redis presence refresh failed"));
+    }, 30_000) : undefined;
+    presenceRefreshTimer?.unref();
     socket.emit("system:ready", { connectedAt: new Date().toISOString() });
     socket.on("system:ping", (acknowledge) => {
       if (typeof acknowledge !== "function") {
@@ -227,7 +272,20 @@ export function createSocketServer(
         await socket.join(workspaceRoom(conversation.workspaceId));
         socket.data.workspaceIds ??= new Set<string>();
         socket.data.workspaceIds.add(conversation.workspaceId);
-        socket.to(workspaceRoom(conversation.workspaceId)).emit("presence:update", { userId: socket.data.userId, status: "online" });
+        const members = await prisma.workspaceMember.findMany({
+          where: { workspaceId: conversation.workspaceId, status: "ACTIVE" },
+          select: { userId: true },
+        });
+        let onlineUserIds = members.map((member) => member.userId).filter((userId) => activeSocketsByUser.has(userId));
+        if (redis) {
+          try {
+            onlineUserIds = await redis.getOnlineUserIds(members.map((member) => member.userId));
+          } catch (error) {
+            logger.warn({ err: error }, "Redis presence snapshot failed");
+          }
+        }
+        socket.emit("presence:snapshot", { workspaceId: conversation.workspaceId, memberUserIds: members.map((member) => member.userId), onlineUserIds });
+        await publishPresence(conversation.workspaceId, socket.data.userId, "online");
         acknowledge?.({ ok: true });
       } catch (error) {
         const payload = socketError(error);
@@ -358,6 +416,7 @@ export function createSocketServer(
     });
 
     socket.on("disconnect", () => {
+      if (presenceRefreshTimer) clearInterval(presenceRefreshTimer);
       if (!socket.data.userId) return;
       for (const room of socket.rooms) {
         if (room.startsWith("channel:")) stopTyping({ workspaceId: "", conversation: { type: "channel", id: room.slice("channel:".length) } });
@@ -365,16 +424,25 @@ export function createSocketServer(
       }
       const sockets = activeSocketsByUser.get(socket.data.userId);
       sockets?.delete(socket.id);
+      const userId = socket.data.userId;
+      if (redis) void redis.removePresence(userId, socket.id).catch((error) => logger.warn({ err: error }, "Redis presence removal failed"));
       if (sockets && sockets.size > 0) return;
       activeSocketsByUser.delete(socket.data.userId);
-      const userId = socket.data.userId;
       presenceGraceTimers.set(userId, setTimeout(() => {
         presenceGraceTimers.delete(userId);
-        if (!activeSocketsByUser.has(userId)) {
-          for (const workspaceId of socket.data.workspaceIds ?? []) {
-            io.to(workspaceRoom(workspaceId)).emit("presence:update", { userId, status: "offline" });
+        if (activeSocketsByUser.has(userId)) return;
+        void (async () => {
+          if (redis) {
+            try {
+              if ((await redis.getOnlineUserIds([userId])).length > 0) return;
+            } catch (error) {
+              logger.warn({ err: error }, "Redis presence offline check failed");
+            }
           }
-        }
+          const memberships = prisma ? await prisma.workspaceMember.findMany({ where: { userId, status: "ACTIVE" }, select: { workspaceId: true } }) : [];
+          const workspaceIds = memberships.length > 0 ? memberships.map((membership) => membership.workspaceId) : [...(socket.data.workspaceIds ?? [])];
+          await Promise.all(workspaceIds.map((workspaceId) => publishPresence(workspaceId, userId, "offline")));
+        })().catch((error) => logger.warn({ err: error }, "Presence offline publication failed"));
       }, 15_000));
     });
   });

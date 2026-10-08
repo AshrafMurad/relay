@@ -482,6 +482,10 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       scheduleSynchronization()
     })
     socket.on("presence:update", (event) => reportPresence(event.userId, event.status))
+    socket.on("presence:snapshot", (event) => {
+      const online = new Set(event.onlineUserIds)
+      for (const userId of event.memberUserIds) reportPresence(userId, online.has(userId) ? "online" : "offline")
+    })
     socket.on("typing:update", (event) => {
       if (event.conversation.type !== target.type || event.conversation.id !== conversationId || event.user.id === user.id) return
       setTypingUsers((current) => event.typing

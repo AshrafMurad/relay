@@ -75,6 +75,12 @@ export interface PresenceUpdateEvent {
   status: "online" | "offline";
 }
 
+export interface PresenceSnapshotEvent {
+  workspaceId: string;
+  memberUserIds: string[];
+  onlineUserIds: string[];
+}
+
 export interface TypingEvent {
   workspaceId: string;
   conversation: ConversationRef;
@@ -106,6 +112,7 @@ export interface ServerToClientEvents {
   "reaction:update": (event: ReactionUpdateEvent) => void;
   "conversation:read:update": (event: ConversationReadUpdateEvent) => void;
   "presence:update": (event: PresenceUpdateEvent) => void;
+  "presence:snapshot": (event: PresenceSnapshotEvent) => void;
   "typing:update": (event: TypingUpdateEvent) => void;
 }
 

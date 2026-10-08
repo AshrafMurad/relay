@@ -8,6 +8,7 @@ export interface RealtimeConversation {
 }
 
 export type RealtimeDomainEvent =
+  | { type: "workspace:member:removed"; workspaceId: string; userId: string }
   | { type: "message:new" | "message:update" | "message:delete"; sequence: string; conversation: RealtimeConversation; message: MessageDTO }
   | { type: "reaction:update"; sequence: string; conversation: RealtimeConversation; messageId: string }
   | { type: "conversation:read:update"; sequence: string; conversation: RealtimeConversation; readState: ConversationReadStateDTO };

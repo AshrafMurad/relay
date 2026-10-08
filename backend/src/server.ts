@@ -7,6 +7,7 @@ import { createLogger } from "./lib/logger.js";
 import { createRedisConnection } from "./lib/redis.js";
 import { createSocketServer } from "./realtime/socket-server.js";
 import { RealtimeEventBus } from "./realtime/realtime-events.js";
+import { cleanupExpiredPendingAttachments } from "./modules/attachments/attachment.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 
@@ -27,7 +28,7 @@ export async function startServer(source: NodeJS.ProcessEnv = process.env) {
   const httpServer = createServer(app);
   httpServer.requestTimeout = 15_000;
   httpServer.headersTimeout = 16_000;
-  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime);
+  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime, redis);
 
   try {
     try {
@@ -52,11 +53,18 @@ export async function startServer(source: NodeJS.ProcessEnv = process.env) {
   }
 
   logger.info({ port: environment.PORT }, "Relay API listening");
+  const cleanupAttachments = () => cleanupExpiredPendingAttachments(database.prisma, environment.UPLOAD_DIR)
+    .then((removed) => { if (removed > 0) logger.info({ removed }, "Expired pending attachments removed"); })
+    .catch((error) => logger.error({ err: error }, "Pending attachment cleanup failed"));
+  void cleanupAttachments();
+  const attachmentCleanupTimer = setInterval(() => void cleanupAttachments(), 60 * 60_000);
+  attachmentCleanupTimer.unref();
 
   let shuttingDown = false;
   async function shutdown(signal: string) {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(attachmentCleanupTimer);
     logger.info({ signal }, "Graceful shutdown started");
 
     const closeServices = async () => {

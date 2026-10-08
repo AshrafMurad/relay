@@ -244,6 +244,12 @@ export interface PresenceUpdateEvent {
   status: "online" | "offline";
 }
 
+export interface PresenceSnapshotEvent {
+  workspaceId: string;
+  memberUserIds: string[];
+  onlineUserIds: string[];
+}
+
 export interface TypingEvent {
   workspaceId: string;
   conversation: ConversationRef;

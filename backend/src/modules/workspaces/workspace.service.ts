@@ -104,6 +104,10 @@ export function canInviteRole(actorRole: WorkspaceRole, inviteRole: WorkspaceRol
   return (actorRole === "OWNER" && inviteRole !== "OWNER") || (actorRole === "ADMIN" && inviteRole === "MEMBER");
 }
 
+export function canRemoveMember(actorRole: WorkspaceRole, targetRole: WorkspaceRole) {
+  return targetRole !== "OWNER" && (actorRole === "OWNER" || (actorRole === "ADMIN" && targetRole === "MEMBER"));
+}
+
 function assertCanInvite(actorRole: WorkspaceRole, inviteRole: WorkspaceRole) {
   if (inviteRole === "OWNER") throw new ApiError(403, "FORBIDDEN", "Owner invitations are not supported.");
   if (canInviteRole(actorRole, inviteRole)) return;
@@ -187,6 +191,15 @@ export async function getWorkspace(prisma: PrismaClient, workspaceId: string, us
   return toWorkspaceDTO(workspace, member.role);
 }
 
+export async function updateWorkspace(prisma: PrismaClient, workspaceId: string, actorId: string, input: { name: string }) {
+  const actor = await requireWorkspaceMember(prisma, workspaceId, actorId);
+  if (actor.role !== "OWNER") throw new ApiError(403, "FORBIDDEN", "Only the workspace owner can update workspace settings.");
+  const name = input.name.trim();
+  if (name.length < 2 || name.length > 120) throw new ApiError(400, "VALIDATION_ERROR", "Workspace name must be 2 to 120 characters.");
+  const workspace = await prisma.workspace.update({ where: { id: workspaceId }, data: { name } });
+  return toWorkspaceDTO(workspace, actor.role);
+}
+
 export async function listMembers(prisma: PrismaClient, workspaceId: string, userId: string) {
   await requireWorkspaceMember(prisma, workspaceId, userId);
   const members = await prisma.workspaceMember.findMany({
@@ -195,6 +208,41 @@ export async function listMembers(prisma: PrismaClient, workspaceId: string, use
     orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
   });
   return members.map(toMemberDTO);
+}
+
+export async function updateMemberRole(prisma: PrismaClient, workspaceId: string, memberId: string, actorId: string, role: Exclude<WorkspaceRole, "OWNER">) {
+  return prisma.$transaction(async (transaction) => {
+    await transaction.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${workspaceId}::uuid FOR UPDATE`);
+    const actor = await requireWorkspaceMember(transaction, workspaceId, actorId);
+    if (actor.role !== "OWNER") throw new ApiError(403, "FORBIDDEN", "Only the workspace owner can change member roles.");
+    const target = await transaction.workspaceMember.findFirst({
+      where: { id: memberId, workspaceId, status: "ACTIVE" },
+      include: { user: { select: { email: true, name: true, image: true } } },
+    });
+    if (!target) throw new ApiError(404, "MEMBER_NOT_FOUND", "Workspace member was not found.");
+    if (target.role === "OWNER") throw new ApiError(403, "FORBIDDEN", "Workspace ownership cannot be changed.");
+    const updated = await transaction.workspaceMember.update({
+      where: { id: target.id },
+      data: { role },
+      include: { user: { select: { email: true, name: true, image: true } } },
+    });
+    return toMemberDTO(updated);
+  });
+}
+
+export async function removeMember(prisma: PrismaClient, workspaceId: string, memberId: string, actorId: string) {
+  return prisma.$transaction(async (transaction) => {
+    await transaction.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${workspaceId}::uuid FOR UPDATE`);
+    const actor = await requireWorkspaceMember(transaction, workspaceId, actorId);
+    const target = await transaction.workspaceMember.findFirst({ where: { id: memberId, workspaceId, status: "ACTIVE" } });
+    if (!target) throw new ApiError(404, "MEMBER_NOT_FOUND", "Workspace member was not found.");
+    if (!canRemoveMember(actor.role, target.role)) throw new ApiError(403, "FORBIDDEN", "You do not have permission to remove this member.");
+    await transaction.workspaceMember.update({
+      where: { id: target.id },
+      data: { status: "REMOVED", removedAt: new Date(), removedById: actorId },
+    });
+    return { memberId: target.id, userId: target.userId };
+  });
 }
 
 export async function createInvitation(

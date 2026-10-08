@@ -73,7 +73,7 @@ export function createApp(
     app.use(createAuthMiddleware(dependencies.database.prisma));
     app.use(createUserRateLimit(300, 60_000, "RATE_LIMITED", "general-authenticated-api"));
     app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
-    app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma, environment.UPLOAD_DIR));
+    app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma, environment.UPLOAD_DIR, dependencies.realtime));
     app.use("/api", createDirectConversationRouter(dependencies.database.prisma));
     app.use("/api/channels", createChannelRouter(dependencies.database.prisma));
     app.use("/api/channels", createChannelMessageRouter(dependencies.database.prisma, dependencies.realtime));
