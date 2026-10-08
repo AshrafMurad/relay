@@ -187,6 +187,9 @@ export interface MessageNewEvent {
   message: MessageDTO;
 }
 
+export type MessageUpdateEvent = MessageNewEvent;
+export type MessageDeleteEvent = MessageNewEvent;
+
 export interface MessageErrorEvent {
   operationId?: string;
   code: string;

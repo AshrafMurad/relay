@@ -6,6 +6,7 @@ import { createDatabase } from "./lib/database.js";
 import { createLogger } from "./lib/logger.js";
 import { createRedisConnection } from "./lib/redis.js";
 import { createSocketServer } from "./realtime/socket-server.js";
+import { RealtimeEventBus } from "./realtime/realtime-events.js";
 
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 
@@ -21,11 +22,12 @@ export async function startServer(source: NodeJS.ProcessEnv = process.env) {
     await database.disconnect().catch(() => undefined);
     throw error;
   }
-  const app = createApp(environment, { database, redis }, logger);
+  const realtime = new RealtimeEventBus();
+  const app = createApp(environment, { database, redis, realtime }, logger);
   const httpServer = createServer(app);
   httpServer.requestTimeout = 15_000;
   httpServer.headersTimeout = 16_000;
-  const io = createSocketServer(httpServer, environment, logger, database.prisma);
+  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime);
 
   try {
     try {

@@ -25,7 +25,7 @@ export function createSearchRouter(prisma: PrismaClient) {
   const router = Router();
   router.use(requireAuth);
 
-  router.get("/", createUserRateLimit(30, 60_000), asyncHandler(async (request, response) => {
+  router.get("/", createUserRateLimit(30, 60_000, "RATE_LIMITED", "search"), asyncHandler(async (request, response) => {
     const query = parse(searchQuerySchema, request.query);
     const results = await searchMessages(prisma, query.workspaceId, request.authUser!.id, query);
     response.json(results);

@@ -28,7 +28,8 @@ export type ApiErrorCode =
   | "CHANNEL_ARCHIVED"
   | "INVALID_CURSOR"
   | "MESSAGE_SEND_RATE_LIMITED"
-  | "RATE_LIMITED";
+  | "RATE_LIMITED"
+  | "CONFLICT";
 
 export interface ApiErrorResponse {
   error: {

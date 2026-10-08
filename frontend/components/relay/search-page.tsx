@@ -16,6 +16,7 @@ function resultHref(workspaceSlug: string, message: MessageDTO) {
 export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
   const [workspace, setWorkspace] = useState<WorkspaceDTO | null>(null)
   const [query, setQuery] = useState("")
+  const [queryError, setQueryError] = useState("")
   const [results, setResults] = useState<MessageDTO[]>([])
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -28,9 +29,14 @@ export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!workspace || query.trim().length < 2) return
+    if (!workspace) return
+    if (query.trim().length < 2) {
+      setQueryError("Enter at least 2 characters to search.")
+      return
+    }
     setLoading(true)
     setError("")
+    setQueryError("")
     try {
       const response = await apiRequest<SearchMessagesResponse>(`/search?workspaceId=${workspace.id}&q=${encodeURIComponent(query.trim())}`)
       setResults(response.results)
@@ -43,10 +49,13 @@ export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <form className="flex shrink-0 flex-col gap-2 border-b border-signal-line p-4 sm:flex-row" onSubmit={submit}>
+      <form className="flex shrink-0 flex-col gap-2 border-b border-signal-line p-4 sm:flex-row" noValidate onSubmit={submit}>
         <label className="sr-only" htmlFor="message-search">Search query</label>
-        <Input autoFocus className="flex-1" id="message-search" minLength={2} onChange={(event) => setQuery(event.target.value)} placeholder="Search saved messages" value={query} />
-        <Button className="sm:w-auto" disabled={loading || !workspace || query.trim().length < 2} type="submit"><Search /> {loading ? "Searching" : "Search"}</Button>
+        <div className="flex-1">
+          <Input aria-describedby={queryError ? "message-search-error" : undefined} aria-invalid={Boolean(queryError)} autoFocus id="message-search" onChange={(event) => { setQuery(event.target.value); setQueryError("") }} placeholder="Search saved messages" value={query} />
+          {queryError && <p className="text-helper mt-1.5 font-semibold text-destructive" id="message-search-error">{queryError}</p>}
+        </div>
+        <Button className="sm:w-auto" disabled={loading || !workspace} type="submit"><Search /> {loading ? "Searching" : "Search"}</Button>
       </form>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {error && <p className="mb-3 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{error}</p>}

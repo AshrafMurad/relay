@@ -38,6 +38,9 @@ export interface MessageNewEvent {
   message: MessageDTO;
 }
 
+export type MessageUpdateEvent = MessageNewEvent;
+export type MessageDeleteEvent = MessageNewEvent;
+
 export interface MessageErrorEvent {
   operationId?: string;
   code: string;
@@ -97,6 +100,8 @@ export interface ServerToClientEvents {
   "system:ready": (event: SystemReadyEvent) => void;
   "message:ack": (event: MessageAckEvent) => void;
   "message:new": (event: MessageNewEvent) => void;
+  "message:update": (event: MessageUpdateEvent) => void;
+  "message:delete": (event: MessageDeleteEvent) => void;
   "message:error": (event: MessageErrorEvent) => void;
   "reaction:update": (event: ReactionUpdateEvent) => void;
   "conversation:read:update": (event: ConversationReadUpdateEvent) => void;

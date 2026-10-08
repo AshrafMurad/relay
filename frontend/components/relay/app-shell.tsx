@@ -6,6 +6,7 @@ import { startTransition, useEffect, useState, type FormEvent, type ReactNode } 
 import { cva } from "class-variance-authority"
 import {
   Archive,
+  Camera,
   ChevronDown,
   Hash,
   Info,
@@ -17,6 +18,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Upload,
   UserRound,
   UsersRound,
 } from "lucide-react"
@@ -50,6 +52,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Textarea } from "@/components/ui/textarea"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
 import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, WorkspaceDTO, WorkspaceMemberDTO } from "@/lib/api/contracts"
+import { mediaUrl } from "@/lib/api/media"
 import { canManageChannels, channelNameSchema } from "@/lib/channels"
 import { cn } from "@/lib/utils"
 
@@ -72,6 +75,20 @@ const navigationItemVariants = cva(
     defaultVariants: { active: false },
   },
 )
+
+function AvatarPicture({ alt = "", className, src }: { alt?: string; className?: string; src: string | null | undefined }) {
+  const resolved = mediaUrl(src)
+  return resolved ? <AvatarImage alt={alt} className={className} src={resolved} /> : null
+}
+
+function ImagePreview({ fallback, src }: { fallback: string; src: string | null }) {
+  return (
+    <Avatar className="size-16 rounded-lg border border-signal-line bg-signal-surface">
+      <AvatarPicture alt="" className="rounded-lg object-cover" src={src} />
+      <AvatarFallback className="rounded-lg bg-signal-surface-raised text-sm font-semibold text-signal-muted">{fallback}</AvatarFallback>
+    </Avatar>
+  )
+}
 
 function LoadingShell() {
   return (
@@ -135,7 +152,7 @@ function ChannelDetails({ channel, currentUserId, members, onlineUserIds }: { ch
                   <div className="flex min-h-10 items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors duration-150 hover:bg-sidebar-accent/80" key={member.id}>
                     <span className="relative shrink-0">
                       <Avatar className="size-7 rounded-md">
-                        {member.image && <AvatarImage alt="" className="rounded-md" src={member.image} />}
+                        <AvatarPicture className="rounded-md" src={member.image} />
                         <AvatarFallback className="text-metadata rounded-md bg-signal-panel-raised font-semibold text-signal-panel-muted">{initials(member.name)}</AvatarFallback>
                       </Avatar>
                       <span aria-label={online ? "Online" : "Offline"} className={cn("absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-signal-panel", online ? "bg-signal-cyan" : "bg-signal-panel-muted/45")} role="img" />
@@ -177,8 +194,16 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(() => new Set())
   const [formOpen, setFormOpen] = useState(false)
   const [formMode, setFormMode] = useState<ChannelFormMode>("create")
+  const [channelNameError, setChannelNameError] = useState("")
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
+  const [workspaceImageFile, setWorkspaceImageFile] = useState<File | null>(null)
+  const [profilePreview, setProfilePreview] = useState<string | null>(null)
+  const [workspacePreview, setWorkspacePreview] = useState<string | null>(null)
+  const [imageError, setImageError] = useState("")
+  const [imageSubmitting, setImageSubmitting] = useState<"profile" | "workspace" | null>(null)
 
   const selectedChannel = channels.find((channel) => channel.id === channelId) ?? null
   const selectedDirectConversation = directConversations.find((conversation) => conversation.id === conversationId) ?? null
@@ -231,6 +256,14 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     void load()
     return () => { cancelled = true }
   }, [router, workspaceSlug])
+
+  useEffect(() => {
+    return () => { if (profilePreview) URL.revokeObjectURL(profilePreview) }
+  }, [profilePreview])
+
+  useEffect(() => {
+    return () => { if (workspacePreview) URL.revokeObjectURL(workspacePreview) }
+  }, [workspacePreview])
 
   useEffect(() => {
     if (state !== "ready" || channelId || conversationId || pathname.endsWith("/search") || pathname.endsWith("/members") || !workspace || channels.length === 0) return
@@ -289,12 +322,14 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
 
   function openCreate() {
     setFormMode("create")
+    setChannelNameError("")
     setFormError("")
     setFormOpen(true)
   }
 
   function openEdit() {
     setFormMode("edit")
+    setChannelNameError("")
     setFormError("")
     setFormOpen(true)
   }
@@ -307,11 +342,12 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     const description = String(form.get("description") ?? "")
     const parsedName = channelNameSchema.safeParse(name)
     if (!parsedName.success) {
-      setFormError(parsedName.error.issues[0]?.message ?? "Channel name is invalid.")
+      setChannelNameError(parsedName.error.issues[0]?.message ?? "Channel name is invalid.")
       return
     }
 
     setSubmitting(true)
+    setChannelNameError("")
     setFormError("")
     try {
       const path = formMode === "create" ? `/workspaces/${workspace.id}/channels` : `/channels/${selectedChannel!.id}`
@@ -349,6 +385,56 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     startTransition(() => router.replace("/login"))
   }
 
+  async function uploadProfileImage() {
+    if (!profileImageFile) return
+    setImageSubmitting("profile")
+    setImageError("")
+    try {
+      const form = new FormData()
+      form.set("file", profileImageFile)
+      const response = await apiRequest<{ user: AuthUserDTO }>("/auth/me/image", { method: "POST", body: form })
+      setUser(response.user)
+      setMembers((current) => current.map((member) => member.userId === response.user.id ? { ...member, image: response.user.image, name: response.user.name, email: response.user.email } : member))
+      setProfileImageFile(null)
+      setProfilePreview(null)
+    } catch (caught) {
+      setImageError(caught instanceof Error ? caught.message : "Profile image could not be uploaded.")
+    } finally {
+      setImageSubmitting(null)
+    }
+  }
+
+  async function uploadWorkspaceImage() {
+    if (!workspaceImageFile || !workspace) return
+    setImageSubmitting("workspace")
+    setImageError("")
+    try {
+      const form = new FormData()
+      form.set("file", workspaceImageFile)
+      const response = await apiRequest<{ workspace: WorkspaceDTO }>(`/workspaces/${workspace.id}/image`, { method: "POST", body: form })
+      setWorkspace(response.workspace)
+      setWorkspaces((current) => current.map((item) => item.id === response.workspace.id ? response.workspace : item))
+      setWorkspaceImageFile(null)
+      setWorkspacePreview(null)
+    } catch (caught) {
+      setImageError(caught instanceof Error ? caught.message : "Workspace image could not be uploaded.")
+    } finally {
+      setImageSubmitting(null)
+    }
+  }
+
+  function chooseProfileImage(file: File | null) {
+    if (profilePreview) URL.revokeObjectURL(profilePreview)
+    setProfileImageFile(file)
+    setProfilePreview(file ? URL.createObjectURL(file) : null)
+  }
+
+  function chooseWorkspaceImage(file: File | null) {
+    if (workspacePreview) URL.revokeObjectURL(workspacePreview)
+    setWorkspaceImageFile(file)
+    setWorkspacePreview(file ? URL.createObjectURL(file) : null)
+  }
+
   function closeUtilityPage() {
     if (!workspace) return
     const firstChannel = channels.find((channel) => !channel.archivedAt) ?? channels[0]
@@ -377,7 +463,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button className="h-11 min-w-0 flex-1 justify-start px-2 text-signal-panel-text hover:bg-sidebar-accent/80" variant="ghost" />}>
-            <span className="text-metadata grid size-8 shrink-0 place-items-center rounded-md border border-sidebar-border bg-signal-carbon font-bold text-signal-amber">{initials(targetWorkspace?.name ?? workspace.name)}</span>
+            <Avatar className="size-8 shrink-0 rounded-md border border-sidebar-border bg-signal-carbon"><AvatarPicture className="rounded-md object-cover" src={targetWorkspace?.imageUrl ?? workspace.imageUrl} /><AvatarFallback className="text-metadata rounded-md bg-signal-carbon font-bold text-signal-amber">{initials(targetWorkspace?.name ?? workspace.name)}</AvatarFallback></Avatar>
             <span className="min-w-0 text-left"><span className="block truncate text-[13px] font-semibold leading-4">{targetWorkspace?.name ?? workspace.name}</span><span className="text-helper block truncate text-signal-panel-muted">{workspace.currentUserRole.toLowerCase()} workspace</span></span>
             <ChevronDown className="ml-auto size-3.5 text-signal-panel-muted" />
           </DropdownMenuTrigger>
@@ -457,7 +543,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
                 >
                   {active && <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-signal-amber" />}
                   <span className="relative shrink-0">
-                    <Avatar className="size-5 rounded-md">{conversation.otherUser.image && <AvatarImage alt="" className="rounded-md" src={conversation.otherUser.image} />}<AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(conversation.otherUser.name)}</AvatarFallback></Avatar>
+                    <Avatar className="size-5 rounded-md"><AvatarPicture className="rounded-md" src={conversation.otherUser.image} /><AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(conversation.otherUser.name)}</AvatarFallback></Avatar>
                     <span aria-label={onlineUserIds.has(conversation.otherUser.id) ? "Online" : "Offline"} className={cn("absolute -bottom-px -right-px size-2 rounded-full border border-signal-panel", onlineUserIds.has(conversation.otherUser.id) ? "bg-signal-cyan" : "bg-signal-panel-muted/50")} role="img" />
                   </span>
                   <span className={cn("truncate", conversation.unreadCount > 0 && !active && "font-semibold text-signal-panel-text")}>{conversation.otherUser.name}</span>
@@ -472,7 +558,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
                 onClick={() => void openDirectMessage(member.userId)}
                 type="button"
               >
-                <span className="relative shrink-0"><Avatar className="size-5 rounded-md">{member.image && <AvatarImage alt="" className="rounded-md" src={member.image} />}<AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(member.name)}</AvatarFallback></Avatar><span aria-label={onlineUserIds.has(member.userId) ? "Online" : "Offline"} className={cn("absolute -bottom-px -right-px size-2 rounded-full border border-signal-panel", onlineUserIds.has(member.userId) ? "bg-signal-cyan" : "bg-signal-panel-muted/50")} role="img" /></span>
+                <span className="relative shrink-0"><Avatar className="size-5 rounded-md"><AvatarPicture className="rounded-md" src={member.image} /><AvatarFallback className="text-metadata rounded-md bg-sidebar-accent font-semibold text-signal-panel-muted">{initials(member.name)}</AvatarFallback></Avatar><span aria-label={onlineUserIds.has(member.userId) ? "Online" : "Offline"} className={cn("absolute -bottom-px -right-px size-2 rounded-full border border-signal-panel", onlineUserIds.has(member.userId) ? "bg-signal-cyan" : "bg-signal-panel-muted/50")} role="img" /></span>
                 <span className="truncate">{member.name}</span>
               </button>
             ))}
@@ -481,10 +567,11 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       </div>
 
       <div className="shrink-0 border-t border-sidebar-border bg-signal-panel p-2.5">
-        <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors hover:bg-sidebar-accent/50">
-          <span className="relative shrink-0"><Avatar className="size-8 rounded-lg">{user.image && <AvatarImage alt="" className="rounded-lg" src={user.image} />}<AvatarFallback className="text-metadata rounded-lg bg-signal-amber font-bold text-signal-carbon">{initials(user.name)}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-signal-panel bg-signal-cyan" /></span>
+        <button className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/35" onClick={() => { setImageError(""); setAccountOpen(true) }} type="button">
+          <span className="relative shrink-0"><Avatar className="size-8 rounded-lg"><AvatarPicture className="rounded-lg" src={user.image} /><AvatarFallback className="text-metadata rounded-lg bg-signal-amber font-bold text-signal-carbon">{initials(user.name)}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-signal-panel bg-signal-cyan" /></span>
           <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-signal-panel-text">{user.name}</p><p className="text-metadata mt-0.5 truncate text-signal-panel-muted" title={user.email}>{user.email}</p></div>
-        </div>
+          <Camera className="size-3.5 shrink-0 text-signal-panel-muted" />
+        </button>
         <div className="mt-1 grid grid-cols-2 gap-1">
           <ThemeControl className="justify-start text-signal-panel-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" showLabel />
           <Button className="justify-start text-signal-panel-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={() => void signOut()} size="sm" type="button" variant="ghost"><LogOut />Sign out</Button>
@@ -504,7 +591,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
               <Tooltip key={item.id}>
                 <TooltipTrigger render={<Link aria-current={item.slug === workspaceSlug ? "page" : undefined} className={cn("text-metadata relative grid size-10 place-items-center rounded-lg border font-bold transition-[background-color,border-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-amber", item.slug === workspaceSlug ? "border-signal-amber/70 bg-signal-amber/10 text-signal-amber" : "border-sidebar-border text-signal-panel-muted hover:border-signal-panel-muted hover:bg-sidebar-accent hover:text-signal-panel-text")} href={`/app/${item.slug}`} />}>
                   {item.slug === workspaceSlug && <span className="absolute inset-y-2 -left-[13px] w-0.5 rounded-r bg-signal-amber" />}
-                  {initials(item.name)}
+                  <Avatar className="size-full rounded-lg"><AvatarPicture className="rounded-lg object-cover" src={item.imageUrl} /><AvatarFallback className="text-metadata rounded-lg bg-transparent font-bold text-inherit">{initials(item.name)}</AvatarFallback></Avatar>
                 </TooltipTrigger>
                 <TooltipContent side="right">{item.name}</TooltipContent>
               </Tooltip>
@@ -532,7 +619,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
               <h1 className="truncate text-sm font-semibold leading-4 tracking-[-0.01em]">{selectedDirectConversation?.otherUser.name ?? selectedChannel?.name ?? workspace.name}</h1>
               <p className="text-helper truncate text-signal-muted">{selectedDirectConversation ? selectedDirectConversation.otherUser.email : selectedChannel?.description || (selectedChannel ? "No channel description" : "Choose a channel or direct message from the workspace navigation")}</p>
             </div>
-            {selectedChannel && <div className="hidden items-center -space-x-1.5 sm:flex" aria-label={`${members.length} workspace members`}>{members.slice(0, 3).map((member) => <Avatar className="size-6 rounded-md border-2 border-signal-paper" key={member.id}>{member.image && <AvatarImage alt="" className="rounded-sm" src={member.image} />}<AvatarFallback className="rounded-sm bg-signal-surface-raised text-[8px] font-semibold text-signal-muted">{initials(member.name)}</AvatarFallback></Avatar>)}{members.length > 3 && <span className="text-metadata grid size-6 place-items-center rounded-md border-2 border-signal-paper bg-signal-surface-raised text-signal-muted">+{members.length - 3}</span>}</div>}
+            {selectedChannel && <div className="hidden items-center -space-x-1.5 sm:flex" aria-label={`${members.length} workspace members`}>{members.slice(0, 3).map((member) => <Avatar className="size-6 rounded-md border-2 border-signal-paper" key={member.id}><AvatarPicture className="rounded-sm" src={member.image} /><AvatarFallback className="rounded-sm bg-signal-surface-raised text-[8px] font-semibold text-signal-muted">{initials(member.name)}</AvatarFallback></Avatar>)}{members.length > 3 && <span className="text-metadata grid size-6 place-items-center rounded-md border-2 border-signal-paper bg-signal-surface-raised text-signal-muted">+{members.length - 3}</span>}</div>}
             <Tooltip>
               <TooltipTrigger render={<Link aria-label="Search messages" className={buttonVariants({ size: "icon-sm", variant: "ghost" })} href={`/app/${workspace.slug}/search`} />}><Search /></TooltipTrigger>
               <TooltipContent>Search messages</TooltipContent>
@@ -598,14 +685,56 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-signal-line bg-signal-paper text-signal-ink sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Profile and workspace images</DialogTitle>
+              <DialogDescription>Upload JPG, PNG, GIF, or WebP images up to 5 MiB.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-3">
+                <div className="flex items-center gap-3">
+                  <ImagePreview fallback={initials(user.name)} src={profilePreview ?? user.image} />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold">Profile image</h3>
+                    <p className="text-helper mt-1 text-signal-muted">Shown beside your messages, direct messages, and member records.</p>
+                    <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="mt-3 h-9 text-xs" onChange={(event) => chooseProfileImage(event.target.files?.[0] ?? null)} type="file" />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button disabled={!profileImageFile || imageSubmitting !== null} onClick={() => void uploadProfileImage()} size="sm" type="button"><Upload />{imageSubmitting === "profile" ? "Uploading..." : "Upload profile image"}</Button>
+                </div>
+              </section>
+
+              {mayManage && (
+                <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-3">
+                  <div className="flex items-center gap-3">
+                    <ImagePreview fallback={initials(workspace.name)} src={workspacePreview ?? workspace.imageUrl} />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold">Workspace image</h3>
+                      <p className="text-helper mt-1 text-signal-muted">Used in the workspace rail and switcher for {workspace.name}.</p>
+                      <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="mt-3 h-9 text-xs" onChange={(event) => chooseWorkspaceImage(event.target.files?.[0] ?? null)} type="file" />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button disabled={!workspaceImageFile || imageSubmitting !== null} onClick={() => void uploadWorkspaceImage()} size="sm" type="button"><Upload />{imageSubmitting === "workspace" ? "Uploading..." : "Upload workspace image"}</Button>
+                  </div>
+                </section>
+              )}
+
+              {imageError && <p className="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{imageError}</p>}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Sheet onOpenChange={setFormOpen} open={formOpen}>
           <SheetContent className="w-[min(92vw,420px)] border-signal-line bg-signal-paper" side="right">
             <SheetHeader>
               <SheetTitle>{formMode === "create" ? "Create channel" : "Edit channel"}</SheetTitle>
               <SheetDescription>{formMode === "create" ? "Add a public channel for every active workspace member." : `Update #${selectedChannel?.name}.`}</SheetDescription>
             </SheetHeader>
-            <form className="grid gap-5 px-4" key={`${formMode}-${selectedChannel?.id ?? "new"}`} onSubmit={submitChannel}>
-               <label className="grid gap-1.5 text-sm font-medium">Name<Input autoFocus defaultValue={formMode === "edit" ? selectedChannel?.name : ""} name="name" pattern="[a-z0-9_-]{2,80}" readOnly={formMode === "edit" && selectedChannel?.name === "general"} required /><span className="text-helper font-normal text-muted-foreground">Lowercase letters, numbers, hyphens, and underscores only.</span></label>
+            <form className="grid gap-5 px-4" key={`${formMode}-${selectedChannel?.id ?? "new"}`} noValidate onSubmit={submitChannel}>
+               <label className="grid gap-1.5 text-sm font-medium">Name<Input aria-describedby={channelNameError ? "channel-name-error" : "channel-name-hint"} aria-invalid={Boolean(channelNameError)} autoFocus defaultValue={formMode === "edit" ? selectedChannel?.name : ""} name="name" onChange={() => setChannelNameError("")} readOnly={formMode === "edit" && selectedChannel?.name === "general"} />{channelNameError ? <span className="text-helper font-semibold text-destructive" id="channel-name-error">{channelNameError}</span> : <span className="text-helper font-normal text-muted-foreground" id="channel-name-hint">Lowercase letters, numbers, hyphens, and underscores only.</span>}</label>
                <label className="grid gap-1.5 text-sm font-medium">Description <span className="text-muted-foreground">(optional)</span><Textarea className="min-h-28" defaultValue={formMode === "edit" ? selectedChannel?.description ?? "" : ""} name="description" /></label>
               {formError && <p className="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{formError}</p>}
               <div className="flex justify-end gap-2"><Button onClick={() => setFormOpen(false)} type="button" variant="outline">Cancel</Button><Button disabled={submitting} type="submit">{submitting ? "Saving..." : formMode === "create" ? "Create channel" : "Save changes"}</Button></div>

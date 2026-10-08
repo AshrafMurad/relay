@@ -1,14 +1,17 @@
 import { WorkspaceRole, type PrismaClient } from "@prisma/client";
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 
 import { ApiError } from "../../lib/api-error.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { createRequestRateLimit } from "../../middleware/rate-limit.js";
 import { createChannelSchema } from "../channels/channel.contracts.js";
 import { createChannel, listChannels } from "../channels/channel.service.js";
+import { MAX_IDENTITY_IMAGE_BYTES, updateWorkspaceImage } from "../identity-images/identity-image.service.js";
 import { getWorkspaceSync, syncQuerySchema } from "../sync/sync.service.js";
-import { acceptInvitation, createInvitation, createWorkspace, getInvitationPreview, getWorkspace, listInvitations, listMembers, listWorkspaces, revokeInvitation } from "./workspace.service.js";
+import { acceptInvitation, createInvitation, createWorkspace, getInvitationPreview, getWorkspace, listInvitations, listMembers, listWorkspaces, revokeInvitation, toWorkspaceDTO } from "./workspace.service.js";
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(2).max(120),
@@ -31,8 +34,9 @@ function parse<T>(schema: z.ZodSchema<T>, value: unknown): T {
   return parsed.data;
 }
 
-export function createWorkspaceRouter(prisma: PrismaClient) {
+export function createWorkspaceRouter(prisma: PrismaClient, uploadDir: string) {
   const router = Router();
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IDENTITY_IMAGE_BYTES, files: 1 } });
 
   router.get("/invitations/:token", asyncHandler(async (request, response) => {
     const { token } = parse(tokenParamsSchema, request.params);
@@ -57,6 +61,13 @@ export function createWorkspaceRouter(prisma: PrismaClient) {
     const { workspaceId } = parse(paramsSchema, request.params);
     const workspace = await getWorkspace(prisma, workspaceId, request.authUser!.id);
     response.json({ workspace });
+  }));
+
+  router.post("/:workspaceId/image", upload.single("file"), asyncHandler(async (request, response) => {
+    const { workspaceId } = parse(paramsSchema, request.params);
+    if (!request.file) throw new ApiError(400, "VALIDATION_ERROR", "An image file is required.");
+    const { workspace, role } = await updateWorkspaceImage(prisma, { uploadDir, workspaceId, userId: request.authUser!.id, file: request.file });
+    response.json({ workspace: toWorkspaceDTO(workspace, role) });
   }));
 
   router.get("/:workspaceId/channels", asyncHandler(async (request, response) => {
@@ -91,7 +102,7 @@ export function createWorkspaceRouter(prisma: PrismaClient) {
     response.json({ invitations });
   }));
 
-  router.post("/:workspaceId/invitations", asyncHandler(async (request, response) => {
+  router.post("/:workspaceId/invitations", createRequestRateLimit(20, 60 * 60_000, (request) => request.authUser ? `${request.params.workspaceId}:${request.authUser.id}` : undefined, "RATE_LIMITED", "invitation-create"), asyncHandler(async (request, response) => {
     const { workspaceId } = parse(paramsSchema, request.params);
     const input = parse(createInvitationSchema, request.body);
     const result = await createInvitation(prisma, workspaceId, request.authUser!.id, input);
@@ -104,7 +115,7 @@ export function createWorkspaceRouter(prisma: PrismaClient) {
     response.json({ invitation });
   }));
 
-  router.post("/invitations/accept", asyncHandler(async (request, response) => {
+  router.post("/invitations/accept", createRequestRateLimit(10, 15 * 60_000, (request) => request.ip, "RATE_LIMITED", "invitation-accept"), asyncHandler(async (request, response) => {
     const { token } = parse(acceptInvitationSchema, request.body);
     const result = await acceptInvitation(prisma, token, request.authUser!);
     response.json(result);

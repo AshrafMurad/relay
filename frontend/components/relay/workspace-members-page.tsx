@@ -16,6 +16,12 @@ function invitationState(invitation: WorkspaceInvitationDTO) {
   return "Pending"
 }
 
+function validateEmail(value: string) {
+  if (!value) return "Enter an email address."
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Enter a valid email address."
+  return ""
+}
+
 export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string }) {
   const [workspace, setWorkspace] = useState<WorkspaceDTO | null>(null)
   const [members, setMembers] = useState<WorkspaceMemberDTO[]>([])
@@ -25,6 +31,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [emailError, setEmailError] = useState("")
 
   const canInvite = workspace?.currentUserRole === "OWNER" || workspace?.currentUserRole === "ADMIN"
 
@@ -54,13 +61,20 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     if (!workspace) return
     const form = event.currentTarget
     const data = new FormData(form)
+    const email = String(data.get("email") ?? "").trim()
+    const nextEmailError = validateEmail(email)
+    if (nextEmailError) {
+      setEmailError(nextEmailError)
+      return
+    }
     setSubmitting(true)
     setError("")
+    setEmailError("")
     setInviteUrl("")
     try {
       const result = await apiRequest<{ invitation: WorkspaceInvitationDTO; token: string }>(`/workspaces/${workspace.id}/invitations`, {
         method: "POST",
-        body: JSON.stringify({ email: data.get("email"), role: data.get("role") as WorkspaceRole }),
+        body: JSON.stringify({ email, role: data.get("role") as WorkspaceRole }),
       })
       const url = `${window.location.origin}/invite/${encodeURIComponent(result.token)}`
       setInvitations((current) => [result.invitation, ...current])
@@ -104,8 +118,11 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
         {canInvite && (
           <section className="border-b border-signal-line pb-5">
             <div className="flex items-center gap-2"><MailPlus className="size-4 text-signal-cyan" /><h2 className="text-sm font-semibold">Invite a teammate</h2></div>
-            <form className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]" onSubmit={invite}>
-              <label className="sr-only" htmlFor="invite-email">Email address</label><Input fieldSize="compact" id="invite-email" name="email" placeholder="teammate@example.com" required type="email" />
+            <form className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]" noValidate onSubmit={invite}>
+              <div>
+                <label className="sr-only" htmlFor="invite-email">Email address</label><Input aria-describedby={emailError ? "invite-email-error" : undefined} aria-invalid={Boolean(emailError)} fieldSize="compact" id="invite-email" inputMode="email" name="email" onChange={() => setEmailError("")} placeholder="teammate@example.com" />
+                {emailError && <p className="text-helper mt-1.5 font-semibold text-destructive" id="invite-email-error">{emailError}</p>}
+              </div>
               <label className="sr-only" id="invite-role-label">Role</label><Select defaultValue="MEMBER" name="role"><SelectTrigger aria-labelledby="invite-role-label" className="w-full" id="invite-role"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MEMBER">Member</SelectItem>{workspace?.currentUserRole === "OWNER" && <SelectItem value="ADMIN">Admin</SelectItem>}</SelectContent></Select>
               <Button disabled={submitting} type="submit">{submitting ? "Creating..." : "Create invite"}</Button>
             </form>

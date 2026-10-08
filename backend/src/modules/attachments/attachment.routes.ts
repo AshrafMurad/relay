@@ -21,7 +21,7 @@ export function createAttachmentRouter(prisma: PrismaClient, uploadDir: string) 
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES, files: 1 } });
   router.use(requireAuth);
 
-  router.post("/", createUserRateLimit(10, 60_000), upload.single("file"), asyncHandler(async (request, response) => {
+  router.post("/", createUserRateLimit(10, 60_000, "RATE_LIMITED", "attachment-upload"), upload.single("file"), asyncHandler(async (request, response) => {
     const body = parse(attachmentUploadBodySchema, request.body);
     if (!request.file) throw new ApiError(400, "VALIDATION_ERROR", "A file is required.");
     const attachment = await createPendingAttachment(prisma, { uploadDir, workspaceId: body.workspaceId, userId: request.authUser!.id, file: request.file });

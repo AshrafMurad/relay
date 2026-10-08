@@ -147,7 +147,10 @@ describe("ChannelMessages", () => {
     const composer = await screen.findByPlaceholderText("Message #general") as HTMLTextAreaElement
     await userEvents.type(composer, "Hello world")
     composer.setSelectionRange(5, 5)
-    await userEvents.click(screen.getByLabelText("Mention someone"))
+    const mentionButton = screen.getByLabelText("Mention someone, coming soon")
+    await userEvents.hover(mentionButton)
+    expect(await screen.findByText("Mentions coming soon")).toBeTruthy()
+    await userEvents.click(mentionButton)
 
     await waitFor(() => expect(composer.value).toBe("Hello @ world"))
     expect(composer.selectionStart).toBe(7)

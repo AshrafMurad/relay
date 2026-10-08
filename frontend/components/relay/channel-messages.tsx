@@ -1,9 +1,21 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { AlertCircle, AtSign, CornerUpLeft, Download, FileArchive, FileJson, FileText, FileType2, ImageIcon, LoaderCircle, MessageSquareText, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, Smile, SmilePlus, Trash2, UserPlus, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -14,8 +26,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { API_BASE_URL, apiRequest } from "@/lib/api/client"
 import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, PendingAttachmentDTO, ReactionSummaryDTO, TypingUpdateEvent, WorkspaceSyncEvent, WorkspaceSyncResponse } from "@/lib/api/contracts"
+import { mediaUrl } from "@/lib/api/media"
 import {
   MESSAGE_CODE_POINT_LIMIT,
   createOptimisticMessage,
@@ -93,6 +107,53 @@ function AttachmentIcon({ mimeType, className }: { mimeType: string; className?:
   return <FileText {...props} />
 }
 
+function downloadUrl(path: string) {
+  return `${API_BASE_URL}${path}`
+}
+
+function MessageAttachmentCard({ attachment }: { attachment: MessageDTO["attachments"][number] }) {
+  const isImage = attachment.mimeType.startsWith("image/")
+  const href = downloadUrl(attachment.downloadUrl)
+  if (isImage) {
+    return (
+      <Attachment className="w-44 border-signal-line bg-signal-surface text-signal-ink hover:bg-signal-surface-raised/45 sm:w-56" orientation="vertical">
+        <AttachmentMedia className="h-32 rounded-md bg-signal-surface-raised sm:h-40" variant="image">
+          <Image alt={attachment.originalFilename} className="object-cover" fill sizes="(min-width: 640px) 14rem, 11rem" src={href} unoptimized />
+        </AttachmentMedia>
+        <AttachmentContent className="pb-2">
+          <AttachmentTitle className="text-xs">{attachment.originalFilename}</AttachmentTitle>
+          <AttachmentDescription className="text-metadata text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</AttachmentDescription>
+        </AttachmentContent>
+        <AttachmentTrigger aria-label={`Open ${attachment.originalFilename}`} render={<a download={attachment.originalFilename} href={href} />} />
+      </Attachment>
+    )
+  }
+  return (
+    <Attachment className="min-h-14 w-full border-signal-line bg-signal-surface text-signal-ink hover:bg-signal-surface-raised/45 sm:max-w-72">
+      <AttachmentMedia className="bg-signal-surface-raised text-signal-muted"><AttachmentIcon mimeType={attachment.mimeType} /></AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle className="text-xs">{attachment.originalFilename}</AttachmentTitle>
+        <AttachmentDescription className="text-metadata text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions><Download className="size-3.5 text-signal-muted" /></AttachmentActions>
+      <AttachmentTrigger aria-label={`Download ${attachment.originalFilename}`} render={<a download={attachment.originalFilename} href={href} />} />
+    </Attachment>
+  )
+}
+
+function PendingAttachmentCard({ attachment, onRemove }: { attachment: PendingAttachmentDTO; onRemove: () => void }) {
+  return (
+    <Attachment className="border-signal-line bg-signal-paper text-signal-ink" size="sm" state="done">
+      <AttachmentMedia className="bg-signal-surface-raised text-signal-muted"><AttachmentIcon mimeType={attachment.mimeType} /></AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{attachment.originalFilename}</AttachmentTitle>
+        <AttachmentDescription className="text-metadata text-signal-muted">{formatFileSize(attachment.sizeBytes)}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions><AttachmentAction aria-label={`Remove ${attachment.originalFilename}`} onClick={onRemove} type="button"><X /></AttachmentAction></AttachmentActions>
+    </Attachment>
+  )
+}
+
 function MessageRow({
   archived,
   currentUserId,
@@ -144,8 +205,8 @@ function MessageRow({
 
   return (
     <article className={cn("group relative flex gap-3 px-4 transition-colors duration-150 hover:bg-signal-surface/55 focus-within:bg-signal-surface/55 sm:px-7", grouped ? "py-0.5" : "pb-1.5 pt-3.5", message.delivery === "failed" && "bg-destructive/5")}>
-      {grouped ? <time className="text-metadata mt-1.5 w-8 shrink-0 text-center text-signal-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time> : <Avatar className="mt-0.5 size-8 rounded-lg">
-        {message.author.image && <AvatarImage alt="" className="rounded-lg" src={message.author.image} />}
+        {grouped ? <time className="text-metadata mt-1.5 w-8 shrink-0 text-center text-signal-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" dateTime={message.createdAt}>{timeFormatter.format(new Date(message.createdAt))}</time> : <Avatar className="mt-0.5 size-8 rounded-lg">
+        {mediaUrl(message.author.image) && <AvatarImage alt="" className="rounded-lg" src={mediaUrl(message.author.image)!} />}
         <AvatarFallback className="text-metadata rounded-lg bg-signal-surface-raised font-semibold text-signal-muted">{initials(message.author.name)}</AvatarFallback>
       </Avatar>}
       <div className="min-w-0 flex-1">
@@ -170,17 +231,7 @@ function MessageRow({
         ) : (
           <p className="text-body max-w-[72ch] whitespace-pre-wrap break-words">{message.content}</p>
         )}
-        {message.attachments.length > 0 && !message.deletedAt && (
-          <div className="mt-2 grid max-w-[40rem] grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {message.attachments.map((attachment) => (
-              <a aria-label={`Download ${attachment.originalFilename}`} className="group/file flex min-h-14 min-w-0 items-center gap-2.5 rounded-md border border-signal-line bg-signal-surface px-2.5 py-2 transition-colors duration-150 hover:border-signal-muted hover:bg-signal-surface-raised/50 focus-visible:border-signal-muted" download={attachment.originalFilename} href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id}>
-                <span className="grid size-9 shrink-0 place-items-center rounded-md bg-signal-surface-raised text-signal-muted"><AttachmentIcon mimeType={attachment.mimeType} /></span>
-                <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-signal-ink group-hover/file:underline">{attachment.originalFilename}</span><span className="text-metadata mt-0.5 block text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</span></span>
-                <Download className="size-3.5 shrink-0 text-signal-muted transition-colors duration-150 group-hover/file:text-signal-ink" />
-              </a>
-            ))}
-          </div>
-        )}
+        {message.attachments.length > 0 && !message.deletedAt && <AttachmentGroup className="mt-2 max-w-[40rem] gap-2 py-0" aria-label="Message attachments">{message.attachments.map((attachment) => <MessageAttachmentCard attachment={attachment} key={attachment.id} />)}</AttachmentGroup>}
         {message.delivery === "failed" && !archived && (
           <div className="text-helper mt-1.5 flex flex-wrap items-center gap-2 text-destructive" role="alert">
             <AlertCircle className="size-3" />
@@ -389,6 +440,16 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       shouldScrollToBottom.current = true
       setMessages((current) => mergeMessages(current, [event.message]))
       reportActivity(event.message)
+      scheduleSynchronization()
+    })
+    socket.on("message:update", (event) => {
+      if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
+      setMessages((current) => reconcileMessageUpdate(current, event.message))
+      scheduleSynchronization()
+    })
+    socket.on("message:delete", (event) => {
+      if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
+      setMessages((current) => reconcileMessageUpdate(current, event.message))
       scheduleSynchronization()
     })
     socket.on("reaction:update", (event) => {
@@ -772,16 +833,10 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
                 value={draft}
               />
               {(pendingAttachments.length > 0 || uploadingAttachment) && (
-                <div className="flex flex-wrap gap-1.5 border-t border-signal-line px-3 py-2">
-                  {pendingAttachments.map((attachment) => (
-                    <span className="text-helper inline-flex min-h-9 max-w-full items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1" key={attachment.id}>
-                      <AttachmentIcon className="text-signal-muted" mimeType={attachment.mimeType} />
-                      <span className="min-w-0 max-w-44"><span className="block truncate font-medium">{attachment.originalFilename}</span><span className="text-metadata block text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span></span>
-                      <button aria-label={`Remove ${attachment.originalFilename}`} className="grid size-6 shrink-0 place-items-center rounded-sm text-signal-muted transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button"><X className="size-3" /></button>
-                    </span>
-                  ))}
-                  {uploadProgress && <span className="text-helper inline-flex min-h-9 items-center gap-2 rounded-md border border-dashed border-signal-line px-2.5 py-1 text-signal-muted" role="status"><LoaderCircle className="size-3.5 animate-spin" />Uploading {uploadProgress.current} of {uploadProgress.total}</span>}
-                </div>
+                <AttachmentGroup className="border-t border-signal-line px-3 py-2" aria-label="Pending attachments">
+                  {pendingAttachments.map((attachment) => <PendingAttachmentCard attachment={attachment} key={attachment.id} onRemove={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} />)}
+                  {uploadProgress && <Attachment className="border-dashed border-signal-line bg-transparent text-signal-muted" size="sm" state="uploading" role="status"><AttachmentMedia className="bg-transparent"><LoaderCircle className="size-3.5 animate-spin" /></AttachmentMedia><AttachmentContent><AttachmentTitle>Uploading attachment</AttachmentTitle><AttachmentDescription className="text-metadata text-signal-muted">{uploadProgress.current} of {uploadProgress.total}</AttachmentDescription></AttachmentContent></Attachment>}
+                </AttachmentGroup>
               )}
               <div className="flex min-h-9 items-center justify-between gap-2 border-t border-signal-line px-2 py-1">
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -803,7 +858,12 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
                       ))}
                     </PopoverContent>
                   </Popover>
-                  <Button aria-label="Mention someone" className="text-signal-muted hover:text-signal-ink [&_svg]:size-3.5" onClick={insertMentionTrigger} size="icon-sm" type="button" variant="ghost"><AtSign /></Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger render={<Button aria-label="Mention someone, coming soon" className="text-signal-muted hover:text-signal-ink [&_svg]:size-3.5" onClick={insertMentionTrigger} size="icon-sm" type="button" variant="ghost" />}><AtSign /></TooltipTrigger>
+                      <TooltipContent side="top">Mentions coming soon</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <div className="flex min-w-0 items-center gap-2">
                   <span className={cn("text-metadata tabular-nums text-signal-muted opacity-60 transition-colors duration-150", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive opacity-100")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>

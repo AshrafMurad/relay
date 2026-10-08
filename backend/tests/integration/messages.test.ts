@@ -285,6 +285,20 @@ describe("durable channel message HTTP API", () => {
     await request(app).post(`/api/channels/${readChannel.id}/read`).set("Cookie", cookie(2)).send({ messageId: second.body.message.id }).expect(404);
   });
 
+  it("keeps read state monotonic across concurrent tabs", async () => {
+    const readChannel = await createChannel(database.prisma, workspaceId, userIds[0]!, { name: `concurrent-read-${randomUUID().slice(0, 8)}` });
+    const older = await request(app).post(`/api/channels/${readChannel.id}/messages`).set("Cookie", cookie(0)).send({ operationId: randomUUID(), content: "older concurrent read" }).expect(201);
+    const newer = await request(app).post(`/api/channels/${readChannel.id}/messages`).set("Cookie", cookie(0)).send({ operationId: randomUUID(), content: "newer concurrent read" }).expect(201);
+
+    await Promise.all([
+      request(app).post(`/api/channels/${readChannel.id}/read`).set("Cookie", cookie(1)).send({ messageId: newer.body.message.id }).expect(200),
+      request(app).post(`/api/channels/${readChannel.id}/read`).set("Cookie", cookie(1)).send({ messageId: older.body.message.id }).expect(200),
+    ]);
+
+    const state = await database.prisma.channelReadState.findUniqueOrThrow({ where: { channelId_userId: { channelId: readChannel.id, userId: userIds[1]! } } });
+    expect(state.lastReadMessageId).toBe(newer.body.message.id);
+  });
+
   it("revokes access after active membership removal", async () => {
     await database.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId: userIds[1]! } },

@@ -34,6 +34,8 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [workspaceNameError, setWorkspaceNameError] = useState("")
+  const [invitationError, setInvitationError] = useState("")
   const [workspaceQuery, setWorkspaceQuery] = useState("")
   const deferredWorkspaceQuery = useDeferredValue(workspaceQuery)
   const showWorkspaceSearch = workspaces.length >= 6
@@ -77,9 +79,21 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
     event.preventDefault()
     const form = event.currentTarget
     const name = String(new FormData(form).get("name") ?? "").trim()
-    if (!name) return
+    if (!name) {
+      setWorkspaceNameError("Enter a workspace name.")
+      return
+    }
+    if (name.length < 2) {
+      setWorkspaceNameError("Workspace name must be at least 2 characters.")
+      return
+    }
+    if (name.length > 120) {
+      setWorkspaceNameError("Workspace name must be 120 characters or fewer.")
+      return
+    }
     setSubmitting(true)
     setError("")
+    setWorkspaceNameError("")
     try {
       const result = await apiRequest<{ workspace: WorkspaceDTO }>("/workspaces", {
         method: "POST",
@@ -97,9 +111,10 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
     event.preventDefault()
     const token = tokenFromInput(String(new FormData(event.currentTarget).get("invitation") ?? ""))
     if (!token) {
-      setError("Enter the invitation link you received.")
+      setInvitationError("Enter the invitation link you received.")
       return
     }
+    setInvitationError("")
     startTransition(() => router.push(`/invite/${encodeURIComponent(token)}`))
   }
 
@@ -182,16 +197,18 @@ export function WorkspaceGateway({ forceChoose = false }: { forceChoose?: boolea
             </div>
           )}
 
-          <form className="py-6" onSubmit={createWorkspace}>
+          <form className="py-6" noValidate onSubmit={createWorkspace}>
             <div className="flex items-center gap-2"><Plus className="size-4 text-signal-amber" /><h2 className="text-sm font-semibold">Create a workspace</h2></div>
             <p className="mt-2 text-xs leading-5 text-signal-muted">You will become the Owner and Relay will prepare a general channel.</p>
-            <div className="mt-4 flex gap-2"><label className="sr-only" htmlFor="workspace-name">Workspace name</label><Input id="workspace-name" maxLength={120} minLength={2} name="name" placeholder="Acme product team" required /><Button disabled={submitting} type="submit">{submitting ? "Creating..." : "Create"}</Button></div>
+            <div className="mt-4 flex gap-2"><label className="sr-only" htmlFor="workspace-name">Workspace name</label><Input aria-describedby={workspaceNameError ? "workspace-name-error" : undefined} aria-invalid={Boolean(workspaceNameError)} id="workspace-name" name="name" onChange={() => setWorkspaceNameError("")} placeholder="Acme product team" /><Button disabled={submitting} type="submit">{submitting ? "Creating..." : "Create"}</Button></div>
+            {workspaceNameError && <p className="text-helper mt-2 font-semibold text-destructive" id="workspace-name-error">{workspaceNameError}</p>}
           </form>
 
-          <form className="border-t border-signal-line py-6" onSubmit={continueToInvite}>
+          <form className="border-t border-signal-line py-6" noValidate onSubmit={continueToInvite}>
             <div className="flex items-center gap-2"><Link2 className="size-4 text-signal-cyan" /><h2 className="text-sm font-semibold">Join with an invitation</h2></div>
             <p className="mt-2 text-xs leading-5 text-signal-muted">Paste the invitation link sent by a workspace Owner or Admin.</p>
-            <div className="mt-4 flex gap-2"><label className="sr-only" htmlFor="invitation">Invitation link</label><Input id="invitation" name="invitation" placeholder="https://relay.example/invite/..." required /><Button type="submit" variant="outline">Continue</Button></div>
+            <div className="mt-4 flex gap-2"><label className="sr-only" htmlFor="invitation">Invitation link</label><Input aria-describedby={invitationError ? "invitation-error" : undefined} aria-invalid={Boolean(invitationError)} id="invitation" name="invitation" onChange={() => setInvitationError("")} placeholder="https://relay.example/invite/..." /><Button type="submit" variant="outline">Continue</Button></div>
+            {invitationError && <p className="text-helper mt-2 font-semibold text-destructive" id="invitation-error">{invitationError}</p>}
           </form>
         </section>
       </div>

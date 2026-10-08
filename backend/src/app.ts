@@ -10,12 +10,14 @@ import type { IncomingMessage } from "node:http";
 import type { Environment } from "./config/env.js";
 import type { DependencyProbe } from "./lib/database.js";
 import type { Logger } from "./lib/logger.js";
+import type { RealtimeEventBus } from "./realtime/realtime-events.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { createUserRateLimit } from "./middleware/rate-limit.js";
 import { createAttachmentRouter } from "./modules/attachments/attachment.routes.js";
 import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { createIdentityImageRouter } from "./modules/identity-images/identity-image.routes.js";
 import { createChannelRouter } from "./modules/channels/channel.routes.js";
 import { createDirectConversationRouter } from "./modules/direct-conversations/direct-conversation.routes.js";
 import { createChannelMessageRouter, createDirectMessageRouter, createMessageRouter } from "./modules/messages/message.routes.js";
@@ -26,6 +28,7 @@ import type { PrismaClient } from "@prisma/client";
 export interface ApplicationDependencies {
   database: DependencyProbe & { prisma?: PrismaClient };
   redis: DependencyProbe;
+  realtime?: RealtimeEventBus;
 }
 
 export function createApp(
@@ -68,16 +71,17 @@ export function createApp(
 
   if (dependencies.database.prisma) {
     app.use(createAuthMiddleware(dependencies.database.prisma));
-    app.use(createUserRateLimit(300, 60_000));
+    app.use(createUserRateLimit(300, 60_000, "RATE_LIMITED", "general-authenticated-api"));
     app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
-    app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma));
+    app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma, environment.UPLOAD_DIR));
     app.use("/api", createDirectConversationRouter(dependencies.database.prisma));
     app.use("/api/channels", createChannelRouter(dependencies.database.prisma));
-    app.use("/api/channels", createChannelMessageRouter(dependencies.database.prisma));
-    app.use("/api/direct-conversations", createDirectMessageRouter(dependencies.database.prisma));
-    app.use("/api/messages", createMessageRouter(dependencies.database.prisma));
+    app.use("/api/channels", createChannelMessageRouter(dependencies.database.prisma, dependencies.realtime));
+    app.use("/api/direct-conversations", createDirectMessageRouter(dependencies.database.prisma, dependencies.realtime));
+    app.use("/api/messages", createMessageRouter(dependencies.database.prisma, dependencies.realtime));
     app.use("/api/search", createSearchRouter(dependencies.database.prisma));
     app.use("/api/attachments", createAttachmentRouter(dependencies.database.prisma, environment.UPLOAD_DIR));
+    app.use("/api/identity-images", createIdentityImageRouter(dependencies.database.prisma, environment.UPLOAD_DIR));
   }
 
   app.use("/api/health", createHealthRouter(dependencies.database, dependencies.redis));

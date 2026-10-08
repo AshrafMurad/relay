@@ -110,7 +110,7 @@ function assertCanInvite(actorRole: WorkspaceRole, inviteRole: WorkspaceRole) {
   throw new ApiError(403, "FORBIDDEN", "You do not have permission to invite that role.");
 }
 
-function toWorkspaceDTO(workspace: { id: string; name: string; slug: string; imageUrl: string | null; createdAt: Date; updatedAt: Date }, role: WorkspaceRole): WorkspaceDTO {
+export function toWorkspaceDTO(workspace: { id: string; name: string; slug: string; imageUrl: string | null; createdAt: Date; updatedAt: Date }, role: WorkspaceRole): WorkspaceDTO {
   return {
     id: workspace.id,
     name: workspace.name,

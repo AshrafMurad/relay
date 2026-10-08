@@ -14,7 +14,8 @@ import { ApiError } from "../lib/api-error.js";
 import { getSessionByToken, SESSION_COOKIE_NAME } from "../modules/auth/auth.service.js";
 import { requireAccessibleDirectConversation } from "../modules/direct-conversations/direct-conversation.service.js";
 import { conversationReadSchema, createMessageSchema, reactionToggleSchema } from "../modules/messages/message.contracts.js";
-import { createChannelMessage, createDirectMessage, markChannelRead, markDirectConversationRead, requireAccessibleChannel, toggleMessageReaction } from "../modules/messages/message.service.js";
+import { createChannelMessage, createDirectMessage, getMessageForViewer, getMessageReactionSummaries, markChannelRead, markDirectConversationRead, requireAccessibleChannel, toggleMessageReaction } from "../modules/messages/message.service.js";
+import type { RealtimeEventBus } from "./realtime-events.js";
 
 function readCookie(header: string | undefined, name: string) {
   if (!header) return undefined;
@@ -69,6 +70,7 @@ export function createSocketServer(
   environment: Pick<Environment, "WEB_ORIGIN">,
   logger: Logger,
   prisma?: PrismaClient,
+  realtime?: RealtimeEventBus,
 ) {
   const allowJoin = createWindowLimiter(60, 60_000);
   const allowShortMessageSend = createWindowLimiter(30, 10_000);
@@ -119,6 +121,28 @@ export function createSocketServer(
     }));
     return sockets.filter((candidate) => candidate.data.userId && authorizedUserIds.has(candidate.data.userId));
   }
+
+  realtime?.subscribe(async (event) => {
+    try {
+      const recipients = await authorizedConversationSockets(event.conversation);
+      for (const recipient of recipients) {
+        if (event.type === "reaction:update") {
+          const reactions = await getMessageReactionSummaries(prisma!, event.messageId, recipient.data.userId!);
+          recipient.emit("reaction:update", { sequence: event.sequence, workspaceId: event.conversation.workspaceId, conversation: { type: event.conversation.type, id: event.conversation.id }, messageId: event.messageId, reactions });
+        } else if (event.type === "conversation:read:update") {
+          recipient.emit("conversation:read:update", { sequence: event.sequence, readState: event.readState });
+        } else {
+          const message = await getMessageForViewer(prisma!, event.message.id, recipient.data.userId!);
+          if (!message) continue;
+          if (event.type === "message:new") recipient.emit("message:new", { sequence: event.sequence, message });
+          else if (event.type === "message:update") recipient.emit("message:update", { sequence: event.sequence, message });
+          else recipient.emit("message:delete", { sequence: event.sequence, message });
+        }
+      }
+    } catch (error) {
+      logger.error({ err: error, eventType: event.type }, "Failed to publish durable realtime event");
+    }
+  });
 
   if (prisma) {
     io.use(async (socket, next) => {
@@ -266,12 +290,13 @@ export function createSocketServer(
         if (result.conversation.workspaceId !== event.workspaceId) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
         const recipients = await authorizedConversationSockets(result.conversation);
         for (const recipient of recipients) {
+          const reactions = await getMessageReactionSummaries(prisma, result.messageId, recipient.data.userId!);
           recipient.emit("reaction:update", {
             sequence: result.sequence,
             workspaceId: result.conversation.workspaceId,
             conversation: { type: result.conversation.type, id: result.conversation.id },
             messageId: result.messageId,
-            reactions: result.reactions,
+            reactions,
           });
         }
       } catch (error) {
@@ -288,14 +313,15 @@ export function createSocketServer(
         const conversation = await authorizeConversation(event);
         const parsed = conversationReadSchema.safeParse({ messageId: event.messageId });
         if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Socket event data is invalid.");
-        const readState = conversation.type === "channel"
+        const result = conversation.type === "channel"
           ? await markChannelRead(prisma, conversation.id, socket.data.userId, parsed.data)
           : await markDirectConversationRead(prisma, conversation.id, socket.data.userId, parsed.data);
+        if (!result.sequence) return;
         const recipients = await authorizedConversationSockets(conversation);
         for (const recipient of recipients) {
           recipient.emit("conversation:read:update", {
-            sequence: `${readState.lastReadAt}:${readState.userId}:read`,
-            readState,
+            sequence: result.sequence,
+            readState: result.readState,
           });
         }
       } catch (error) {

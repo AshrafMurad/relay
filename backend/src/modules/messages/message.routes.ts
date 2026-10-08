@@ -6,6 +6,7 @@ import { ApiError } from "../../lib/api-error.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createUserRateLimit } from "../../middleware/rate-limit.js";
+import type { RealtimeEventBus } from "../../realtime/realtime-events.js";
 import {
   channelMessageParamsSchema,
   conversationReadSchema,
@@ -38,7 +39,7 @@ function parseHistoryQuery(value: unknown): MessageHistoryQuery {
   return parsed.data;
 }
 
-export function createChannelMessageRouter(prisma: PrismaClient) {
+export function createChannelMessageRouter(prisma: PrismaClient, realtime?: RealtimeEventBus) {
   const router = Router();
   router.use(requireAuth);
 
@@ -53,47 +54,54 @@ export function createChannelMessageRouter(prisma: PrismaClient) {
     const { channelId } = parse(channelMessageParamsSchema, request.params);
     const input = parse(createMessageSchema, request.body);
     const result = await createChannelMessage(prisma, channelId, request.authUser!.id, input);
+    if (result.created && result.sequence) {
+      realtime?.publish({ type: "message:new", sequence: result.sequence, conversation: { type: "channel", id: channelId, workspaceId: result.message.workspaceId, room: `channel:${channelId}` }, message: result.message });
+    }
     response.status(result.created ? 201 : 200).json({ message: result.message });
   }));
 
   router.post("/:channelId/read", asyncHandler(async (request, response) => {
     const { channelId } = parse(channelMessageParamsSchema, request.params);
     const input = parse(conversationReadSchema, request.body);
-    const readState = await markChannelRead(prisma, channelId, request.authUser!.id, input);
-    response.json({ readState });
+    const result = await markChannelRead(prisma, channelId, request.authUser!.id, input);
+    if (result.sequence) realtime?.publish({ type: "conversation:read:update", sequence: result.sequence, conversation: { type: "channel", id: channelId, workspaceId: result.readState.workspaceId, room: `channel:${channelId}` }, readState: result.readState });
+    response.json({ readState: result.readState });
   }));
 
   return router;
 }
 
-export function createMessageRouter(prisma: PrismaClient) {
+export function createMessageRouter(prisma: PrismaClient, realtime?: RealtimeEventBus) {
   const router = Router();
   router.use(requireAuth);
 
   router.patch("/:messageId", asyncHandler(async (request, response) => {
     const { messageId } = parse(messageParamsSchema, request.params);
     const input = parse(editMessageSchema, request.body);
-    const message = await editMessage(prisma, messageId, request.authUser!.id, input);
-    response.json({ message });
+    const result = await editMessage(prisma, messageId, request.authUser!.id, input);
+    realtime?.publish({ type: "message:update", sequence: result.sequence, conversation: result.conversation, message: result.message });
+    response.json({ message: result.message });
   }));
 
   router.delete("/:messageId", asyncHandler(async (request, response) => {
     const { messageId } = parse(messageParamsSchema, request.params);
-    const message = await deleteMessage(prisma, messageId, request.authUser!.id);
-    response.json({ message });
+    const result = await deleteMessage(prisma, messageId, request.authUser!.id);
+    if (result.sequence) realtime?.publish({ type: "message:delete", sequence: result.sequence, conversation: result.conversation, message: result.message });
+    response.json({ message: result.message });
   }));
 
-  router.post("/:messageId/reactions", createUserRateLimit(60, 60_000), asyncHandler(async (request, response) => {
+  router.post("/:messageId/reactions", createUserRateLimit(60, 60_000, "RATE_LIMITED", "reaction-change"), asyncHandler(async (request, response) => {
     const { messageId } = parse(messageParamsSchema, request.params);
     const input = parse(reactionToggleSchema, request.body);
     const result = await toggleMessageReaction(prisma, messageId, request.authUser!.id, input);
+    realtime?.publish({ type: "reaction:update", sequence: result.sequence, conversation: result.conversation, messageId: result.messageId });
     response.json({ messageId: result.messageId, reactions: result.reactions });
   }));
 
   return router;
 }
 
-export function createDirectMessageRouter(prisma: PrismaClient) {
+export function createDirectMessageRouter(prisma: PrismaClient, realtime?: RealtimeEventBus) {
   const router = Router();
   router.use(requireAuth);
 
@@ -108,14 +116,18 @@ export function createDirectMessageRouter(prisma: PrismaClient) {
     const { conversationId } = parse(directMessageParamsSchema, request.params);
     const input = parse(createMessageSchema, request.body);
     const result = await createDirectMessage(prisma, conversationId, request.authUser!.id, input);
+    if (result.created && result.sequence) {
+      realtime?.publish({ type: "message:new", sequence: result.sequence, conversation: { type: "dm", id: conversationId, workspaceId: result.message.workspaceId, room: `dm:${conversationId}` }, message: result.message });
+    }
     response.status(result.created ? 201 : 200).json({ message: result.message });
   }));
 
   router.post("/:conversationId/read", asyncHandler(async (request, response) => {
     const { conversationId } = parse(directMessageParamsSchema, request.params);
     const input = parse(conversationReadSchema, request.body);
-    const readState = await markDirectConversationRead(prisma, conversationId, request.authUser!.id, input);
-    response.json({ readState });
+    const result = await markDirectConversationRead(prisma, conversationId, request.authUser!.id, input);
+    if (result.sequence) realtime?.publish({ type: "conversation:read:update", sequence: result.sequence, conversation: { type: "dm", id: conversationId, workspaceId: result.readState.workspaceId, room: `dm:${conversationId}` }, readState: result.readState });
+    response.json({ readState: result.readState });
   }));
 
   return router;
