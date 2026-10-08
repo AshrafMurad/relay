@@ -348,6 +348,51 @@
   animation: route-settle 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+.hero-route {
+  transform-origin: left;
+  animation: hero-route-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
+}
+
+.hero-route::after {
+  position: absolute;
+  top: 50%;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--signal-surface);
+  border-radius: 999px;
+  background: var(--signal-amber);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.hero-recovery {
+  transform-origin: center;
+  animation: hero-recovery-reveal 500ms cubic-bezier(0.16, 1, 0.3, 1) 950ms both;
+}
+
+@keyframes hero-route-draw {
+  from {
+    opacity: 0;
+    transform: scaleX(0.05);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes hero-recovery-reveal {
+  from {
+    opacity: 0;
+    transform: scaleX(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 @keyframes route-draw {
   from {
     transform: scaleX(0.12);

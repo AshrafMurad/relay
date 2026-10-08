@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { cva } from "class-variance-authority"
-import { Camera, ChevronDown, Hash, LayoutGrid, LogOut, Plus, Search, UsersRound } from "lucide-react"
+import { Camera, ChevronDown, Hash, LayoutGrid, LogOut, Plus } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -42,7 +42,6 @@ type WorkspaceNavigationProps = {
   mayManage: boolean
   members: WorkspaceMemberDTO[]
   onlineUserIds: Set<string>
-  pathname: string
   targetWorkspace: WorkspaceDTO | null
   user: AuthUserDTO
   workspace: WorkspaceDTO
@@ -54,7 +53,7 @@ type WorkspaceNavigationProps = {
   onSignOut: () => void
 }
 
-export function WorkspaceNavigation({ channelId, channels, conversationId, directConversations, isSwitchingWorkspace, mayManage, members, onlineUserIds, pathname, targetWorkspace, user, workspace, workspaces, onCreateChannel, onOpenAccount, onOpenDirectMessage, onSelectNavigation, onSignOut }: WorkspaceNavigationProps) {
+export function WorkspaceNavigation({ channelId, channels, conversationId, directConversations, isSwitchingWorkspace, mayManage, members, onlineUserIds, targetWorkspace, user, workspace, workspaces, onCreateChannel, onOpenAccount, onOpenDirectMessage, onSelectNavigation, onSignOut }: WorkspaceNavigationProps) {
   return (
     <div className="theme-navigation flex h-full min-h-0 flex-col bg-signal-panel">
       <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-sidebar-border px-3 pr-12 lg:pr-3">
@@ -79,14 +78,6 @@ export function WorkspaceNavigation({ channelId, channels, conversationId, direc
 
       <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", isSwitchingWorkspace && "pointer-events-none opacity-55")}>
         <div className="p-3">
-          <div className="mb-3 border-b border-sidebar-border pb-3">
-          <Link aria-current={pathname.endsWith("/members") ? "page" : undefined} className={cn("mb-1", navigationItemVariants({ active: pathname.endsWith("/members") }))} href={`/app/${workspace.slug}/members`} onClick={onSelectNavigation}>
-            <UsersRound className="size-3.5" /> Members
-          </Link>
-          <Link aria-current={pathname.endsWith("/search") ? "page" : undefined} className={navigationItemVariants({ active: pathname.endsWith("/search") })} href={`/app/${workspace.slug}/search`} onClick={onSelectNavigation}>
-            <Search className="size-3.5" /> Search messages
-          </Link>
-          </div>
           <div className="flex h-9 items-end justify-between px-2 pb-1">
             <div>
               <p className="text-helper font-semibold uppercase tracking-[0.12em] text-signal-panel-muted">Channels <span className="text-metadata ml-1 font-normal">{channels.length}</span></p>

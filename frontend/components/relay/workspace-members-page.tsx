@@ -2,10 +2,12 @@
 
 import { Check, Clipboard, MailPlus, Shield, UserRound, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
 import type { WorkspaceDTO, WorkspaceInvitationDTO, WorkspaceMemberDTO, WorkspaceRole } from "@/lib/api/contracts"
 
@@ -81,8 +83,11 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setInviteUrl(url)
       setCopied(false)
       form.reset()
+      toast.success("Invitation created", { description: `Invite link for ${email} is ready to share.` })
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Invitation could not be created.")
+      const message = caught instanceof Error ? caught.message : "Invitation could not be created."
+      setError(message)
+      toast.error("Invite was not created", { description: message })
     } finally {
       setSubmitting(false)
     }
@@ -92,8 +97,11 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     try {
       await navigator.clipboard.writeText(inviteUrl)
       setCopied(true)
+      toast.success("Invite link copied", { description: "The invitation link is on your clipboard." })
     } catch {
-      setError("Copy was blocked by the browser. Select and copy the invitation link manually.")
+      const message = "Copy was blocked by the browser. Select and copy the invitation link manually."
+      setError(message)
+      toast.error("Copy failed", { description: message })
     }
   }
 
@@ -103,12 +111,15 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     try {
       const result = await apiRequest<{ invitation: WorkspaceInvitationDTO }>(`/workspaces/${workspace.id}/invitations/${invitationId}`, { method: "DELETE" })
       setInvitations((current) => current.map((item) => item.id === invitationId ? result.invitation : item))
+      toast.success("Invitation revoked", { description: "That invite link can no longer be accepted." })
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Invitation could not be revoked.")
+      const message = caught instanceof Error ? caught.message : "Invitation could not be revoked."
+      setError(message)
+      toast.error("Revoke failed", { description: message })
     }
   }
 
-  if (loading) return <div className="grid min-h-72 place-items-center text-sm text-signal-muted" role="status">Loading members...</div>
+  if (loading) return <div className="grid min-h-72 place-items-center text-sm text-signal-muted" role="status"><span className="inline-flex items-center gap-2"><Spinner className="text-signal-cyan" />Loading members...</span></div>
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
@@ -124,7 +135,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
                 {emailError && <p className="text-helper mt-1.5 font-semibold text-destructive" id="invite-email-error">{emailError}</p>}
               </div>
               <label className="sr-only" id="invite-role-label">Role</label><Select defaultValue="MEMBER" name="role"><SelectTrigger aria-labelledby="invite-role-label" className="w-full" id="invite-role"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MEMBER">Member</SelectItem>{workspace?.currentUserRole === "OWNER" && <SelectItem value="ADMIN">Admin</SelectItem>}</SelectContent></Select>
-              <Button disabled={submitting} type="submit">{submitting ? "Creating..." : "Create invite"}</Button>
+              <Button disabled={submitting} type="submit">{submitting && <Spinner />}{submitting ? "Creating" : "Create invite"}</Button>
             </form>
             {inviteUrl && (
               <div className="mt-4 border-t border-signal-line pt-4"><p className="text-xs font-semibold">Invitation link created</p><p className="mt-1 text-xs text-signal-muted">Share this link only with the invited person. It expires after seven days.</p><div className="mt-3 flex gap-2"><Input aria-label="Invitation link" className="min-w-0 flex-1 font-mono text-xs" fieldSize="compact" readOnly value={inviteUrl} /><Button onClick={() => void copyInvite()} type="button" variant="outline">{copied ? <Check /> : <Clipboard />}{copied ? "Copied" : "Copy"}</Button></div></div>

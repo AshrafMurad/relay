@@ -3,8 +3,10 @@
 import Link from "next/link"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import { startTransition, useEffect, useState, type FormEvent, type ReactNode } from "react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { AppHeader } from "@/components/relay/app-shell/app-header"
 import { ChannelDetails } from "@/components/relay/app-shell/channel-details"
 import { AccountImagesDialog, ChannelFormSheet, UtilityDialog, type ChannelFormMode } from "@/components/relay/app-shell/dialogs"
@@ -33,10 +35,7 @@ function LoadingShell() {
         <div className="mx-auto size-12"><BrandLogo mark="icon" priority /></div>
         <p className="mt-4 text-sm font-semibold">Opening workspace</p>
         <p className="mt-1 text-xs text-signal-muted">Loading routes, members, and unread state.</p>
-        <div className="mt-5 space-y-2" aria-hidden="true">
-          <div className="mx-auto h-2 w-48 animate-pulse rounded bg-signal-surface-raised" />
-          <div className="mx-auto h-2 w-32 animate-pulse rounded bg-signal-surface-raised" />
-        </div>
+        <Spinner className="mx-auto mt-5 size-5 text-signal-cyan" />
       </div>
     </main>
   )
@@ -234,11 +233,16 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
         ? [...current, channel].sort((left, right) => left.name.localeCompare(right.name))
         : current.map((item) => item.id === channel.id ? channel : item))
       setFormOpen(false)
+      toast.success(formMode === "create" ? "Channel created" : "Channel updated", {
+        description: formMode === "create" ? `#${channel.name} is ready for the workspace.` : `#${channel.name} details were saved.`,
+      })
       if (formMode === "create") {
         startTransition(() => router.push(`/app/${workspace.slug}/channels/${channel.id}`))
       }
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "Channel could not be saved.")
+      const message = caught instanceof Error ? caught.message : "Channel could not be saved."
+      setFormError(message)
+      toast.error("Channel was not saved", { description: message })
     } finally {
       setSubmitting(false)
     }
@@ -250,8 +254,13 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       const { channel } = await apiRequest<{ channel: ChannelDTO }>(`/channels/${selectedChannel.id}/${action}`, { method: "POST" })
       setChannels((current) => current.map((item) => item.id === channel.id ? channel : item))
       setError("")
+      toast.success(action === "archive" ? "Channel archived" : "Channel restored", {
+        description: `#${channel.name} is ${action === "archive" ? "hidden from active channel flow" : "available again"}.`,
+      })
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : `Channel could not be ${action}d.`)
+      const message = caught instanceof Error ? caught.message : `Channel could not be ${action}d.`
+      setError(message)
+      toast.error(action === "archive" ? "Archive failed" : "Restore failed", { description: message })
     }
   }
 
@@ -274,8 +283,11 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setProfileImageFile(null)
       setProfilePreview(null)
       setImageUploadProgress(100)
+      toast.success("Profile image updated", { description: "Your new image is now shown across Relay." })
     } catch (caught) {
-      setImageError(caught instanceof Error ? caught.message : "Profile image could not be uploaded.")
+      const message = caught instanceof Error ? caught.message : "Profile image could not be uploaded."
+      setImageError(message)
+      toast.error("Profile upload failed", { description: message })
     } finally {
       setImageSubmitting(null)
       setImageUploadProgress(0)
@@ -296,8 +308,11 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setWorkspaceImageFile(null)
       setWorkspacePreview(null)
       setImageUploadProgress(100)
+      toast.success("Workspace image updated", { description: `${response.workspace.name} now uses the new workspace image.` })
     } catch (caught) {
-      setImageError(caught instanceof Error ? caught.message : "Workspace image could not be uploaded.")
+      const message = caught instanceof Error ? caught.message : "Workspace image could not be uploaded."
+      setImageError(message)
+      toast.error("Workspace upload failed", { description: message })
     } finally {
       setImageSubmitting(null)
       setImageUploadProgress(0)
@@ -349,7 +364,6 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       mayManage={mayManage}
       members={members}
       onlineUserIds={onlineUserIds}
-      pathname={pathname}
       targetWorkspace={targetWorkspace}
       user={user}
       workspace={workspace}
@@ -389,7 +403,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           {isSwitchingWorkspace ? (
             <section className="grid min-h-0 flex-1 place-items-center overflow-auto p-6 sm:p-10" role="status">
               <div className="max-w-md rounded-lg border border-signal-line bg-signal-surface/50 px-5 py-6 text-center">
-                <div className="mx-auto mb-4 size-10"><BrandLogo mark="icon" /></div>
+                <Spinner className="mx-auto mb-4 size-6 text-signal-cyan" />
                 <h2 className="text-base font-semibold">Switching to {targetWorkspace?.name ?? "workspace"}</h2>
                 <p className="mt-2 text-sm text-signal-muted">Refreshing channels, members, and direct messages.</p>
               </div>

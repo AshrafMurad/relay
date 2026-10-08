@@ -3,9 +3,11 @@
 import { useEffect, useState, type FormEvent } from "react"
 import Link from "next/link"
 import { Paperclip, Search } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 import { API_BASE_URL, apiRequest } from "@/lib/api/client"
 import type { MessageDTO, SearchMessagesResponse, WorkspaceDTO } from "@/lib/api/contracts"
 
@@ -41,7 +43,9 @@ export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
       const response = await apiRequest<SearchMessagesResponse>(`/search?workspaceId=${workspace.id}&q=${encodeURIComponent(query.trim())}`)
       setResults(response.results)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Search failed.")
+      const message = caught instanceof Error ? caught.message : "Search failed."
+      setError(message)
+      toast.error("Search failed", { description: message })
     } finally {
       setLoading(false)
     }
@@ -55,12 +59,12 @@ export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
           <Input aria-describedby={queryError ? "message-search-error" : undefined} aria-invalid={Boolean(queryError)} autoFocus id="message-search" onChange={(event) => { setQuery(event.target.value); setQueryError("") }} placeholder="Search saved messages" value={query} />
           {queryError && <p className="text-helper mt-1.5 font-semibold text-destructive" id="message-search-error">{queryError}</p>}
         </div>
-        <Button className="sm:w-auto" disabled={loading || !workspace} type="submit"><Search /> {loading ? "Searching" : "Search"}</Button>
+        <Button className="sm:w-auto" disabled={loading || !workspace} type="submit">{loading ? <Spinner /> : <Search />} {loading ? "Searching" : "Search"}</Button>
       </form>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {error && <p className="mb-3 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">{error}</p>}
         <div className="space-y-2">
-          {loading && <p className="rounded-md border border-signal-line bg-signal-surface px-3 py-2 text-xs text-signal-muted" role="status">Searching saved history...</p>}
+          {loading && <p className="inline-flex items-center gap-2 rounded-md border border-signal-line bg-signal-surface px-3 py-2 text-xs text-signal-muted" role="status"><Spinner className="size-3.5 text-signal-cyan" />Searching saved history...</p>}
           {results.map((message) => (
             <article className="rounded-md border border-signal-line bg-signal-surface p-3 transition-colors hover:border-signal-cyan/50" key={message.id}>
               <div className="flex items-baseline gap-2">

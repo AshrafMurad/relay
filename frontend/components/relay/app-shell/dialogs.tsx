@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { AuthUserDTO, ChannelDTO, WorkspaceDTO } from "@/lib/api/contracts"
 import { cn } from "@/lib/utils"
@@ -82,7 +83,7 @@ export function AccountImagesDialog({ imageError, imageSubmitting, imageUploadPr
                   <p className="text-metadata min-w-0 truncate rounded-md border border-signal-line bg-signal-paper px-2.5 py-2 text-signal-muted">
                     {profileImageFile ? `${profileImageFile.name} · ${formatImageSize(profileImageFile.size)}` : "No file selected"}
                   </p>
-                  <Button className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" disabled={!profileImageFile || imageSubmitting !== null} onClick={onUploadProfileImage} size="sm" type="button"><Upload />{imageSubmitting === "profile" ? "Uploading..." : "Upload"}</Button>
+                  <Button className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" disabled={!profileImageFile || imageSubmitting !== null} onClick={onUploadProfileImage} size="sm" type="button">{imageSubmitting === "profile" ? <Spinner /> : <Upload />}{imageSubmitting === "profile" ? "Uploading" : "Upload"}</Button>
                 </div>
               </div>
             </div>
@@ -102,7 +103,7 @@ export function AccountImagesDialog({ imageError, imageSubmitting, imageUploadPr
                     <p className="text-metadata min-w-0 truncate rounded-md border border-signal-line bg-signal-paper px-2.5 py-2 text-signal-muted">
                       {workspaceImageFile ? `${workspaceImageFile.name} · ${formatImageSize(workspaceImageFile.size)}` : "No file selected"}
                     </p>
-                    <Button className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" disabled={!workspaceImageFile || imageSubmitting !== null} onClick={onUploadWorkspaceImage} size="sm" type="button"><Upload />{imageSubmitting === "workspace" ? "Uploading..." : "Upload"}</Button>
+                    <Button className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" disabled={!workspaceImageFile || imageSubmitting !== null} onClick={onUploadWorkspaceImage} size="sm" type="button">{imageSubmitting === "workspace" ? <Spinner /> : <Upload />}{imageSubmitting === "workspace" ? "Uploading" : "Upload"}</Button>
                   </div>
                 </div>
               </div>
@@ -141,7 +142,7 @@ export function ChannelFormSheet({ channelNameError, formError, formMode, open, 
            <label className="grid gap-1.5 text-sm font-medium">Name<Input aria-describedby={channelNameError ? "channel-name-error" : "channel-name-hint"} aria-invalid={Boolean(channelNameError)} autoFocus defaultValue={formMode === "edit" ? selectedChannel?.name : ""} name="name" onChange={onClearChannelNameError} readOnly={formMode === "edit" && selectedChannel?.name === "general"} />{channelNameError ? <span className="text-helper font-semibold text-destructive" id="channel-name-error">{channelNameError}</span> : <span className="text-helper font-normal text-muted-foreground" id="channel-name-hint">Lowercase letters, numbers, hyphens, and underscores only.</span>}</label>
            <label className="grid gap-1.5 text-sm font-medium">Description <span className="text-muted-foreground">(optional)</span><Textarea className="min-h-28" defaultValue={formMode === "edit" ? selectedChannel?.description ?? "" : ""} name="description" /></label>
           {formError && <p className="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{formError}</p>}
-          <div className="flex justify-end gap-2"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button><Button disabled={submitting} type="submit">{submitting ? "Saving..." : formMode === "create" ? "Create channel" : "Save changes"}</Button></div>
+          <div className="flex justify-end gap-2"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button><Button disabled={submitting} type="submit">{submitting && <Spinner />}{submitting ? "Saving" : formMode === "create" ? "Create channel" : "Save changes"}</Button></div>
         </form>
       </SheetContent>
     </Sheet>

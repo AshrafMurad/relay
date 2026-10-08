@@ -3,6 +3,7 @@ import { Archivo, Geist_Mono } from "next/font/google"
 import Script from "next/script"
 
 import "./globals.css"
+import { Toaster } from "@/components/ui/sonner"
 import { THEME_INIT_SCRIPT } from "@/lib/theme"
 
 const archivo = Archivo({
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full">
         {children}
+        <Toaster position="bottom-right" richColors={false} closeButton />
         <Script id="relay-theme" strategy="beforeInteractive">{THEME_INIT_SCRIPT}</Script>
       </body>
     </html>
