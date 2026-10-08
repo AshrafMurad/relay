@@ -8,6 +8,7 @@ import { ApiError } from "../../lib/api-error.js";
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE_NAME = "relay_session";
 const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const PASSWORD_MIN_LENGTH = 6;
 export const PASSWORD_MAX_LENGTH = 128;
 
@@ -131,14 +132,27 @@ export async function signIn(
   return { token, user: toAuthUserDTO(account.user) };
 }
 
-export async function getSessionByToken(prisma: PrismaClient, token: string | undefined) {
+export async function getSessionByToken(prisma: PrismaClient, token: string | undefined, refresh = false) {
   if (!token) return null;
+  const now = new Date();
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: true },
   });
-  if (!session || session.expiresAt <= new Date()) return null;
-  return session as Session & { user: User };
+  if (!session || session.expiresAt <= now) return null;
+  let refreshed = false;
+  if (refresh && session.updatedAt <= new Date(now.getTime() - SESSION_REFRESH_INTERVAL_MS)) {
+    const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
+    const result = await prisma.session.updateMany({
+      where: { id: session.id, expiresAt: { gt: now }, updatedAt: { lte: new Date(now.getTime() - SESSION_REFRESH_INTERVAL_MS) } },
+      data: { expiresAt },
+    });
+    if (result.count === 1) {
+      session.expiresAt = expiresAt;
+      refreshed = true;
+    }
+  }
+  return Object.assign(session as Session & { user: User }, { refreshed });
 }
 
 export async function signOut(prisma: PrismaClient, token: string | undefined) {

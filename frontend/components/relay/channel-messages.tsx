@@ -17,7 +17,7 @@ import {
   AttachmentTrigger,
 } from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -312,6 +312,8 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [composerError, setComposerError] = useState("")
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null)
+  const [messageToDelete, setMessageToDelete] = useState<ClientMessage | null>(null)
+  const [deletingMessage, setDeletingMessage] = useState(false)
   const [socketState, setSocketState] = useState<SocketState>("connecting")
   const [typingUsers, setTypingUsers] = useState<TypingUpdateEvent["user"][]>([])
   const [lastReadMessageId, setLastReadMessageId] = useState(target.type === "channel" ? target.channel.lastReadMessageId : target.conversation.lastReadMessageId)
@@ -734,13 +736,22 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
 
   async function deleteMessage(message: ClientMessage) {
     if (archived) return
-    if (!window.confirm("Delete this message? The reply context will remain as a tombstone.")) return
+    setMessageToDelete(message)
+  }
+
+  async function confirmDeleteMessage() {
+    if (!messageToDelete) return
+    const message = messageToDelete
+    setDeletingMessage(true)
     try {
       const response = await apiRequest<{ message: MessageDTO }>(`/messages/${message.id}`, { method: "DELETE" })
       setMessages((current) => reconcileMessageUpdate(current, response.message))
       if (replyingTo?.id === message.id) setReplyingTo(null)
+      setMessageToDelete(null)
     } catch (caught) {
       setHistoryError(messageError(caught, "Message could not be deleted."))
+    } finally {
+      setDeletingMessage(false)
     }
   }
 
@@ -899,6 +910,18 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
           </div>
         )}
       </div>
+      <Dialog onOpenChange={(open) => { if (!open && !deletingMessage) setMessageToDelete(null) }} open={Boolean(messageToDelete)}>
+        <DialogContent className="border-signal-line bg-signal-paper text-signal-ink ring-0" showCloseButton={!deletingMessage}>
+          <DialogHeader className="pr-8">
+            <DialogTitle>Delete this message?</DialogTitle>
+            <DialogDescription>The message text will be replaced by a tombstone so replies keep their context. This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="border-signal-line bg-signal-surface/60">
+            <Button disabled={deletingMessage} onClick={() => setMessageToDelete(null)} type="button" variant="outline">Cancel</Button>
+            <Button disabled={deletingMessage} onClick={() => void confirmDeleteMessage()} type="button" variant="destructive">{deletingMessage && <LoaderCircle className="animate-spin" />}{deletingMessage ? "Deleting" : "Delete message"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

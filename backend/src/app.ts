@@ -70,7 +70,7 @@ export function createApp(
   app.use(cookieParser());
 
   if (dependencies.database.prisma) {
-    app.use(createAuthMiddleware(dependencies.database.prisma));
+    app.use(createAuthMiddleware(dependencies.database.prisma, environment.NODE_ENV === "production"));
     app.use(createUserRateLimit(300, 60_000, "RATE_LIMITED", "general-authenticated-api"));
     app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
     app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma, environment.UPLOAD_DIR, dependencies.realtime));

@@ -261,4 +261,26 @@ describe("ChannelMessages", () => {
     expect(await screen.findByText("Recovered after reconnect")).toBeTruthy()
     expect(window.localStorage.getItem("relay:sync:workspace-1")).toBe("current-checkpoint")
   })
+
+  it("confirms message deletion in an accessible dialog", async () => {
+    const userEvents = userEvent.setup()
+    mockSocket()
+    const original = message("delete-me", "Remove this update", "2026-01-05T00:00:00.000Z")
+    vi.mocked(apiRequest).mockImplementation((path, init) => {
+      if (typeof path === "string" && path.includes("/sync")) return Promise.resolve({ events: [], nextCursor: "0", hasMore: false }) as never
+      if (path === "/messages/delete-me" && init?.method === "DELETE") return Promise.resolve({ message: { ...original, content: "", deletedAt: "2026-01-05T01:00:00.000Z" } }) as never
+      return Promise.resolve({ messages: [original], nextCursor: null, hasMore: false }) as never
+    })
+
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+    await screen.findByText("Remove this update")
+    await userEvents.click(screen.getByLabelText("More actions for message from Ada Lovelace"))
+    await userEvents.click(await screen.findByText("Delete"))
+
+    expect(await screen.findByRole("dialog", { name: "Delete this message?" })).toBeTruthy()
+    expect(apiRequest).not.toHaveBeenCalledWith("/messages/delete-me", expect.anything())
+    await userEvents.click(screen.getByRole("button", { name: "Delete message" }))
+    await waitFor(() => expect(apiRequest).toHaveBeenCalledWith("/messages/delete-me", { method: "DELETE" }))
+    expect(await screen.findByText("This message was deleted.")).toBeTruthy()
+  })
 })

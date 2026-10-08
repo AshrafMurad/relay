@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
@@ -33,6 +34,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [memberAction, setMemberAction] = useState("")
+  const [memberToRemove, setMemberToRemove] = useState<WorkspaceMemberDTO | null>(null)
   const [error, setError] = useState("")
   const [emailError, setEmailError] = useState("")
 
@@ -156,13 +158,15 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     }
   }
 
-  async function remove(member: WorkspaceMemberDTO) {
-    if (!workspace || !window.confirm(`Remove ${member.name} from ${workspace.name}?`)) return
+  async function removeMember() {
+    if (!workspace || !memberToRemove) return
+    const member = memberToRemove
     setMemberAction(member.id)
     setError("")
     try {
       await apiRequest(`/workspaces/${workspace.id}/members/${member.id}`, { method: "DELETE" })
       setMembers((current) => current.filter((item) => item.id !== member.id))
+      setMemberToRemove(null)
       toast.success("Member removed", { description: `${member.name} no longer has workspace access.` })
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "The member could not be removed."
@@ -210,7 +214,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
             {members.map((member) => {
               const mayChangeRole = workspace?.currentUserRole === "OWNER" && member.role !== "OWNER"
               const mayRemove = member.role !== "OWNER" && (workspace?.currentUserRole === "OWNER" || (workspace?.currentUserRole === "ADMIN" && member.role === "MEMBER"))
-              return <div className="flex min-h-14 items-center gap-3 py-3" key={member.id}><span className="grid size-8 place-items-center rounded-md bg-signal-surface-raised"><UserRound className="size-4 text-signal-muted" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-signal-muted">{member.email}</p></div>{mayChangeRole ? <Select disabled={memberAction === member.id} onValueChange={(role) => void changeRole(member, role as "ADMIN" | "MEMBER")} value={member.role}><SelectTrigger aria-label={`Role for ${member.name}`} className="w-28"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ADMIN">Admin</SelectItem><SelectItem value="MEMBER">Member</SelectItem></SelectContent></Select> : <span className="flex items-center gap-1 text-xs text-signal-muted"><Shield className="size-3" />{member.role.toLowerCase()}</span>}{mayRemove && <Button aria-label={`Remove ${member.name}`} disabled={memberAction === member.id} onClick={() => void remove(member)} size="icon" type="button" variant="ghost"><Trash2 /></Button>}</div>
+              return <div className="flex min-h-14 items-center gap-3 py-3" key={member.id}><span className="grid size-8 place-items-center rounded-md bg-signal-surface-raised"><UserRound className="size-4 text-signal-muted" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-signal-muted">{member.email}</p></div>{mayChangeRole ? <Select disabled={memberAction === member.id} onValueChange={(role) => void changeRole(member, role as "ADMIN" | "MEMBER")} value={member.role}><SelectTrigger aria-label={`Role for ${member.name}`} className="w-28"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ADMIN">Admin</SelectItem><SelectItem value="MEMBER">Member</SelectItem></SelectContent></Select> : <span className="flex items-center gap-1 text-xs text-signal-muted"><Shield className="size-3" />{member.role.toLowerCase()}</span>}{mayRemove && <Button aria-label={`Remove ${member.name}`} disabled={memberAction === member.id} onClick={() => setMemberToRemove(member)} size="icon" type="button" variant="ghost"><Trash2 /></Button>}</div>
             })}
           </div>
         </section>
@@ -230,6 +234,18 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
           </section>
         )}
       </div>
+      <Dialog onOpenChange={(open) => { if (!open && !memberAction) setMemberToRemove(null) }} open={Boolean(memberToRemove)}>
+        <DialogContent className="border-signal-line bg-signal-paper text-signal-ink ring-0" showCloseButton={!memberAction}>
+          <DialogHeader className="pr-8">
+            <DialogTitle>Remove {memberToRemove?.name}?</DialogTitle>
+            <DialogDescription>{memberToRemove?.name} will immediately lose access to {workspace?.name}. Their membership record and message history will be retained.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="border-signal-line bg-signal-surface/60">
+            <Button disabled={Boolean(memberAction)} onClick={() => setMemberToRemove(null)} type="button" variant="outline">Cancel</Button>
+            <Button disabled={Boolean(memberAction)} onClick={() => void removeMember()} type="button" variant="destructive">{memberAction && <Spinner />}{memberAction ? "Removing" : "Remove member"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
