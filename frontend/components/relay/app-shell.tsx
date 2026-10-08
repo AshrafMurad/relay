@@ -716,43 +716,49 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
         </Dialog>
 
         <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
-          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-signal-line bg-signal-paper text-signal-ink sm:max-w-lg">
-            <DialogHeader>
+          <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden border-signal-line bg-signal-paper p-3 text-signal-ink sm:max-w-lg sm:p-4">
+            <DialogHeader className="pr-8">
               <DialogTitle>Profile and workspace images</DialogTitle>
-              <DialogDescription>Upload JPG, PNG, GIF, or WebP images up to 5 MiB. Images are cropped to fit compact workspace and message surfaces.</DialogDescription>
+              <DialogDescription className="text-xs leading-5 sm:text-sm">Upload JPG, PNG, GIF, or WebP images up to 5 MiB. Images are cropped for compact workspace and message surfaces.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4">
-              <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-4">
-                <div className="flex items-center gap-4">
+              <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-3 sm:p-4">
+                <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-4">
                   <ImagePreview fallback={initials(user.name)} src={profilePreview ?? user.image} />
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold">Profile image</h3>
                     <p className="text-helper mt-1 text-signal-muted">Shown beside your messages, direct messages, and member records.</p>
-                    <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="mt-3 h-9 text-xs" onChange={(event) => chooseProfileImage(event.target.files?.[0] ?? null)} type="file" />
-                    {profileImageFile && <p className="text-metadata mt-2 truncate text-signal-muted">{profileImageFile.name} · {formatImageSize(profileImageFile.size)}</p>}
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+                      <label className={cn(buttonVariants({ size: "sm", variant: "outline" }), "cursor-pointer border-signal-line bg-signal-paper text-signal-ink hover:bg-signal-surface-raised") } htmlFor="profile-image-input">Choose image</label>
+                      <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="sr-only" id="profile-image-input" onChange={(event) => chooseProfileImage(event.target.files?.[0] ?? null)} type="file" />
+                      <p className="text-metadata min-w-0 truncate rounded-md border border-signal-line bg-signal-paper px-2.5 py-2 text-signal-muted">
+                        {profileImageFile ? `${profileImageFile.name} · ${formatImageSize(profileImageFile.size)}` : "No file selected"}
+                      </p>
+                      <Button className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" disabled={!profileImageFile || imageSubmitting !== null} onClick={() => void uploadProfileImage()} size="sm" type="button"><Upload />{imageSubmitting === "profile" ? "Uploading..." : "Upload"}</Button>
+                    </div>
                   </div>
                 </div>
                 {imageSubmitting === "profile" && <Progress className="mt-3 gap-1.5" value={imageUploadProgress}><ProgressLabel className="text-helper text-signal-muted">Uploading profile image</ProgressLabel><ProgressValue className="text-metadata text-signal-muted" /></Progress>}
-                <div className="mt-3 flex justify-end gap-2">
-                  <Button disabled={!profileImageFile || imageSubmitting !== null} onClick={() => void uploadProfileImage()} size="sm" type="button"><Upload />{imageSubmitting === "profile" ? "Uploading..." : "Upload profile image"}</Button>
-                </div>
               </section>
 
               {mayManage && (
-                <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-4">
-                  <div className="flex items-center gap-4">
+                <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-3 sm:p-4">
+                  <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-4">
                     <ImagePreview fallback={initials(workspace.name)} src={workspacePreview ?? workspace.imageUrl} />
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-semibold">Workspace image</h3>
                       <p className="text-helper mt-1 text-signal-muted">Used in the workspace rail and switcher for {workspace.name}.</p>
-                      <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="mt-3 h-9 text-xs" onChange={(event) => chooseWorkspaceImage(event.target.files?.[0] ?? null)} type="file" />
-                      {workspaceImageFile && <p className="text-metadata mt-2 truncate text-signal-muted">{workspaceImageFile.name} · {formatImageSize(workspaceImageFile.size)}</p>}
+                      <div className="mt-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+                        <label className={cn(buttonVariants({ size: "sm", variant: "outline" }), "cursor-pointer border-signal-line bg-signal-paper text-signal-ink hover:bg-signal-surface-raised") } htmlFor="workspace-image-input">Choose image</label>
+                        <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="sr-only" id="workspace-image-input" onChange={(event) => chooseWorkspaceImage(event.target.files?.[0] ?? null)} type="file" />
+                        <p className="text-metadata min-w-0 truncate rounded-md border border-signal-line bg-signal-paper px-2.5 py-2 text-signal-muted">
+                          {workspaceImageFile ? `${workspaceImageFile.name} · ${formatImageSize(workspaceImageFile.size)}` : "No file selected"}
+                        </p>
+                        <Button className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto" disabled={!workspaceImageFile || imageSubmitting !== null} onClick={() => void uploadWorkspaceImage()} size="sm" type="button"><Upload />{imageSubmitting === "workspace" ? "Uploading..." : "Upload"}</Button>
+                      </div>
                     </div>
                   </div>
                   {imageSubmitting === "workspace" && <Progress className="mt-3 gap-1.5" value={imageUploadProgress}><ProgressLabel className="text-helper text-signal-muted">Uploading workspace image</ProgressLabel><ProgressValue className="text-metadata text-signal-muted" /></Progress>}
-                  <div className="mt-3 flex justify-end gap-2">
-                    <Button disabled={!workspaceImageFile || imageSubmitting !== null} onClick={() => void uploadWorkspaceImage()} size="sm" type="button"><Upload />{imageSubmitting === "workspace" ? "Uploading..." : "Upload workspace image"}</Button>
-                  </div>
                 </section>
               )}
 
