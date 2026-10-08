@@ -17,6 +17,7 @@ import {
   AttachmentTrigger,
 } from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -116,16 +117,33 @@ function MessageAttachmentCard({ attachment }: { attachment: MessageDTO["attachm
   const href = downloadUrl(attachment.downloadUrl)
   if (isImage) {
     return (
-      <Attachment className="w-44 border-signal-line bg-signal-surface text-signal-ink hover:bg-signal-surface-raised/45 sm:w-56" orientation="vertical">
-        <AttachmentMedia className="h-32 rounded-md bg-signal-surface-raised sm:h-40" variant="image">
-          <Image alt={attachment.originalFilename} className="object-cover" fill sizes="(min-width: 640px) 14rem, 11rem" src={href} unoptimized />
-        </AttachmentMedia>
-        <AttachmentContent className="pb-2">
-          <AttachmentTitle className="text-xs">{attachment.originalFilename}</AttachmentTitle>
-          <AttachmentDescription className="text-metadata text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</AttachmentDescription>
-        </AttachmentContent>
-        <AttachmentTrigger aria-label={`Open ${attachment.originalFilename}`} render={<a download={attachment.originalFilename} href={href} />} />
-      </Attachment>
+      <Dialog>
+        <Attachment className="w-44 border-signal-line bg-signal-surface text-signal-ink hover:bg-signal-surface-raised/45 sm:w-56" orientation="vertical">
+          <AttachmentMedia className="h-32 rounded-md bg-signal-surface-raised sm:h-40" variant="image">
+            <Image alt={attachment.originalFilename} className="object-cover" fill sizes="(min-width: 640px) 14rem, 11rem" src={href} unoptimized />
+          </AttachmentMedia>
+          <AttachmentContent className="pb-2">
+            <AttachmentTitle className="text-xs">{attachment.originalFilename}</AttachmentTitle>
+            <AttachmentDescription className="text-metadata text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</AttachmentDescription>
+          </AttachmentContent>
+          <DialogTrigger render={<AttachmentTrigger aria-label={`Preview ${attachment.originalFilename}`} />} />
+        </Attachment>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-hidden border-signal-line bg-signal-paper p-0 text-signal-ink sm:max-w-4xl">
+          <DialogHeader className="border-b border-signal-line px-4 py-3 pr-12 text-left">
+            <DialogTitle className="truncate text-sm">{attachment.originalFilename}</DialogTitle>
+            <DialogDescription className="text-metadata text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</DialogDescription>
+          </DialogHeader>
+          <div className="grid max-h-[min(72dvh,44rem)] place-items-center overflow-auto bg-signal-carbon p-3 sm:p-5">
+            <div className="relative h-[min(62dvh,38rem)] w-full max-w-3xl overflow-hidden rounded-lg border border-sidebar-border bg-signal-panel">
+              <Image alt={attachment.originalFilename} className="object-contain" fill sizes="(min-width: 1024px) 56rem, calc(100vw - 3rem)" src={href} unoptimized />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-signal-line px-4 py-3">
+            <p className="text-helper min-w-0 truncate text-signal-muted">Authenticated image preview</p>
+            <Button nativeButton={false} render={<a download={attachment.originalFilename} href={href} />} size="sm" variant="outline"><Download />Download</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     )
   }
   return (

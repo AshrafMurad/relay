@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
+import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
 import {
   Sheet,
   SheetContent,
@@ -83,11 +84,16 @@ function AvatarPicture({ alt = "", className, src }: { alt?: string; className?:
 
 function ImagePreview({ fallback, src }: { fallback: string; src: string | null }) {
   return (
-    <Avatar className="size-16 rounded-lg border border-signal-line bg-signal-surface">
+    <Avatar className="size-20 overflow-hidden rounded-lg border border-signal-line bg-signal-surface">
       <AvatarPicture alt="" className="rounded-lg object-cover" src={src} />
       <AvatarFallback className="rounded-lg bg-signal-surface-raised text-sm font-semibold text-signal-muted">{fallback}</AvatarFallback>
     </Avatar>
   )
+}
+
+function formatImageSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function LoadingShell() {
@@ -204,6 +210,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   const [workspacePreview, setWorkspacePreview] = useState<string | null>(null)
   const [imageError, setImageError] = useState("")
   const [imageSubmitting, setImageSubmitting] = useState<"profile" | "workspace" | null>(null)
+  const [imageUploadProgress, setImageUploadProgress] = useState(0)
 
   const selectedChannel = channels.find((channel) => channel.id === channelId) ?? null
   const selectedDirectConversation = directConversations.find((conversation) => conversation.id === conversationId) ?? null
@@ -264,6 +271,12 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     return () => { if (workspacePreview) URL.revokeObjectURL(workspacePreview) }
   }, [workspacePreview])
+
+  useEffect(() => {
+    if (!imageSubmitting) return
+    const interval = window.setInterval(() => setImageUploadProgress((current) => Math.min(current + 12, 88)), 250)
+    return () => window.clearInterval(interval)
+  }, [imageSubmitting])
 
   useEffect(() => {
     if (state !== "ready" || channelId || conversationId || pathname.endsWith("/search") || pathname.endsWith("/members") || !workspace || channels.length === 0) return
@@ -388,6 +401,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
   async function uploadProfileImage() {
     if (!profileImageFile) return
     setImageSubmitting("profile")
+    setImageUploadProgress(12)
     setImageError("")
     try {
       const form = new FormData()
@@ -397,16 +411,19 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setMembers((current) => current.map((member) => member.userId === response.user.id ? { ...member, image: response.user.image, name: response.user.name, email: response.user.email } : member))
       setProfileImageFile(null)
       setProfilePreview(null)
+      setImageUploadProgress(100)
     } catch (caught) {
       setImageError(caught instanceof Error ? caught.message : "Profile image could not be uploaded.")
     } finally {
       setImageSubmitting(null)
+      setImageUploadProgress(0)
     }
   }
 
   async function uploadWorkspaceImage() {
     if (!workspaceImageFile || !workspace) return
     setImageSubmitting("workspace")
+    setImageUploadProgress(12)
     setImageError("")
     try {
       const form = new FormData()
@@ -416,10 +433,12 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setWorkspaces((current) => current.map((item) => item.id === response.workspace.id ? response.workspace : item))
       setWorkspaceImageFile(null)
       setWorkspacePreview(null)
+      setImageUploadProgress(100)
     } catch (caught) {
       setImageError(caught instanceof Error ? caught.message : "Workspace image could not be uploaded.")
     } finally {
       setImageSubmitting(null)
+      setImageUploadProgress(0)
     }
   }
 
@@ -567,15 +586,26 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       </div>
 
       <div className="shrink-0 border-t border-sidebar-border bg-signal-panel p-2.5">
-        <button className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-cyan/35" onClick={() => { setImageError(""); setAccountOpen(true) }} type="button">
-          <span className="relative shrink-0"><Avatar className="size-8 rounded-lg"><AvatarPicture className="rounded-lg" src={user.image} /><AvatarFallback className="text-metadata rounded-lg bg-signal-amber font-bold text-signal-carbon">{initials(user.name)}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-signal-panel bg-signal-cyan" /></span>
-          <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-signal-panel-text">{user.name}</p><p className="text-metadata mt-0.5 truncate text-signal-panel-muted" title={user.email}>{user.email}</p></div>
-          <Camera className="size-3.5 shrink-0 text-signal-panel-muted" />
-        </button>
-        <div className="mt-1 grid grid-cols-2 gap-1">
-          <ThemeControl className="justify-start text-signal-panel-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" showLabel />
-          <Button className="justify-start text-signal-panel-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={() => void signOut()} size="sm" type="button" variant="ghost"><LogOut />Sign out</Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button className="h-auto w-full justify-start gap-2.5 px-1.5 py-1.5 text-signal-panel-text hover:bg-sidebar-accent/50" variant="ghost" />}>
+            <span className="relative shrink-0"><Avatar className="size-8 rounded-lg"><AvatarPicture className="rounded-lg object-cover" src={user.image} /><AvatarFallback className="text-metadata rounded-lg bg-signal-amber font-bold text-signal-carbon">{initials(user.name)}</AvatarFallback></Avatar><span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-signal-panel bg-signal-cyan" /></span>
+            <span className="min-w-0 flex-1 text-left"><span className="block truncate text-xs font-semibold">{user.name}</span><span className="text-metadata mt-0.5 block truncate text-signal-panel-muted" title={user.email}>{user.email}</span></span>
+            <ChevronDown className="size-3.5 shrink-0 text-signal-panel-muted" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="theme-navigation w-64 border-sidebar-border bg-signal-panel text-signal-panel-text">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Account</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => { setImageError(""); setAccountOpen(true) }}><Camera /> Profile and workspace images</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setNavigationOpen(false)} render={<Link href="/app?choose=1" />}><LayoutGrid /> All workspaces</DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <div className="px-1 py-0.5"><ThemeControl className="w-full justify-start text-signal-panel-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" showLabel /></div>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => void signOut()} variant="destructive"><LogOut /> Sign out</DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )
@@ -689,33 +719,37 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-signal-line bg-signal-paper text-signal-ink sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Profile and workspace images</DialogTitle>
-              <DialogDescription>Upload JPG, PNG, GIF, or WebP images up to 5 MiB.</DialogDescription>
+              <DialogDescription>Upload JPG, PNG, GIF, or WebP images up to 5 MiB. Images are cropped to fit compact workspace and message surfaces.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4">
-              <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-3">
-                <div className="flex items-center gap-3">
+              <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-4">
+                <div className="flex items-center gap-4">
                   <ImagePreview fallback={initials(user.name)} src={profilePreview ?? user.image} />
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold">Profile image</h3>
                     <p className="text-helper mt-1 text-signal-muted">Shown beside your messages, direct messages, and member records.</p>
                     <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="mt-3 h-9 text-xs" onChange={(event) => chooseProfileImage(event.target.files?.[0] ?? null)} type="file" />
+                    {profileImageFile && <p className="text-metadata mt-2 truncate text-signal-muted">{profileImageFile.name} · {formatImageSize(profileImageFile.size)}</p>}
                   </div>
                 </div>
+                {imageSubmitting === "profile" && <Progress className="mt-3 gap-1.5" value={imageUploadProgress}><ProgressLabel className="text-helper text-signal-muted">Uploading profile image</ProgressLabel><ProgressValue className="text-metadata text-signal-muted" /></Progress>}
                 <div className="mt-3 flex justify-end gap-2">
                   <Button disabled={!profileImageFile || imageSubmitting !== null} onClick={() => void uploadProfileImage()} size="sm" type="button"><Upload />{imageSubmitting === "profile" ? "Uploading..." : "Upload profile image"}</Button>
                 </div>
               </section>
 
               {mayManage && (
-                <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-3">
-                  <div className="flex items-center gap-3">
+                <section className="rounded-lg border border-signal-line bg-signal-surface/55 p-4">
+                  <div className="flex items-center gap-4">
                     <ImagePreview fallback={initials(workspace.name)} src={workspacePreview ?? workspace.imageUrl} />
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-semibold">Workspace image</h3>
                       <p className="text-helper mt-1 text-signal-muted">Used in the workspace rail and switcher for {workspace.name}.</p>
                       <Input accept=".jpg,.jpeg,.png,.gif,.webp" className="mt-3 h-9 text-xs" onChange={(event) => chooseWorkspaceImage(event.target.files?.[0] ?? null)} type="file" />
+                      {workspaceImageFile && <p className="text-metadata mt-2 truncate text-signal-muted">{workspaceImageFile.name} · {formatImageSize(workspaceImageFile.size)}</p>}
                     </div>
                   </div>
+                  {imageSubmitting === "workspace" && <Progress className="mt-3 gap-1.5" value={imageUploadProgress}><ProgressLabel className="text-helper text-signal-muted">Uploading workspace image</ProgressLabel><ProgressValue className="text-metadata text-signal-muted" /></Progress>}
                   <div className="mt-3 flex justify-end gap-2">
                     <Button disabled={!workspaceImageFile || imageSubmitting !== null} onClick={() => void uploadWorkspaceImage()} size="sm" type="button"><Upload />{imageSubmitting === "workspace" ? "Uploading..." : "Upload workspace image"}</Button>
                   </div>
