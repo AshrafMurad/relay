@@ -114,22 +114,6 @@ export async function signUp(
   return { token, user: toAuthUserDTO(user) };
 }
 
-export async function verifyEmail(prisma: PrismaClient, token: string) {
-  const verification = await prisma.verification.findUnique({ where: { valueHash: hashToken(token) } });
-  if (!verification || verification.expiresAt <= new Date() || !verification.identifier.startsWith("email:")) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Email verification link is invalid or expired.");
-  }
-  const email = verification.identifier.slice("email:".length);
-
-  const user = await prisma.$transaction(async (transaction) => {
-    const updated = await transaction.user.update({ where: { email }, data: { emailVerified: true } });
-    await transaction.verification.delete({ where: { id: verification.id } });
-    return updated;
-  });
-
-  return toAuthUserDTO(user);
-}
-
 export async function signIn(
   prisma: PrismaClient,
   input: { email: string; password: string },

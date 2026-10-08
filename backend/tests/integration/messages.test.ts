@@ -88,6 +88,28 @@ afterAll(async () => {
 const app = createApp(environment, { database, redis: available }, createLogger(environment));
 
 describe("durable channel message HTTP API", () => {
+  it("returns contract-correct durable events after a sync checkpoint", async () => {
+    const checkpoint = await request(app).get(`/api/workspaces/${workspaceId}/sync`).set("Cookie", cookie(0)).expect(200);
+    const created = await request(app).post(`/api/channels/${channelId}/messages`).set("Cookie", cookie(0)).send({ operationId: randomUUID(), content: "recover after reconnect" }).expect(201);
+    const synchronized = await request(app)
+      .get(`/api/workspaces/${workspaceId}/sync?after=${encodeURIComponent(checkpoint.body.nextCursor)}`)
+      .set("Cookie", cookie(0))
+      .expect(200);
+
+    expect(synchronized.body).toMatchObject({
+      hasMore: false,
+      resetRequired: false,
+      nextCursor: expect.any(String),
+      events: [{
+        sequence: expect.any(String),
+        type: "message:new",
+        occurredAt: expect.any(String),
+        data: { message: { id: created.body.message.id, content: "recover after reconnect" } },
+      }],
+    });
+    expect(synchronized.body.events[0]).not.toHaveProperty("payload");
+  });
+
   it("requires authentication and hides channels from outsiders", async () => {
     await request(app).get(`/api/channels/${channelId}/messages`).expect(401);
     const response = await request(app).get(`/api/channels/${channelId}/messages`).set("Cookie", cookie(2)).expect(404);

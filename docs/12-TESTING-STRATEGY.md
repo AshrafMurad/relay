@@ -40,9 +40,7 @@ Test Express + database behavior for:
 - invitations;
 - search scoping;
 - attachment metadata permissions.
-- email verification and password-reset expiry;
-- Google and credential account linking by verified email;
-- session expiry, refresh, logout, and password-reset revocation;
+- session expiry, refresh, and logout;
 - duplicate message operation IDs returning one durable message;
 - archived channel read-only behavior;
 - pending upload expiry and workspace quota enforcement.
@@ -74,7 +72,7 @@ Required scenarios:
 Use Playwright for critical flows:
 
 1. sign up;
-2. verify email or sign in with Google;
+2. sign in;
 3. create workspace;
 4. invite member;
 5. accept invite;

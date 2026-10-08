@@ -23,8 +23,8 @@
 - Redis
 
 ### Authentication
-- Better Auth hosted by Express and integrated with the shared user model.
-- Email/password with required email verification and Google OAuth.
+- Email/password authentication hosted by Express and integrated with the shared user model.
+- Email verification and Google OAuth are outside the current product scope.
 - Opaque database-backed sessions in PostgreSQL, transported by an HttpOnly cookie.
 - The Socket.IO handshake validates the same session cookie as HTTP requests.
 

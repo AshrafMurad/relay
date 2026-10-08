@@ -87,7 +87,7 @@ npm --prefix backend run dev
 npm --prefix frontend run dev
 ```
 
-Google OAuth is disabled during local development when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are empty. Supplying only one credential is invalid, and both are mandatory in production.
+Google OAuth is not part of the current product scope. The interface keeps a non-operational Google control labeled as coming soon.
 
 ## Health Checks
 

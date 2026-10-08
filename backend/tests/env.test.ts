@@ -39,7 +39,7 @@ describe("parseEnvironment", () => {
     ).toThrowError(new RegExp(`^(?!.*${secret}).*$`));
   });
 
-  it("requires HTTPS and Google OAuth in production", () => {
+  it("requires HTTPS in production", () => {
     expect(() =>
       parseEnvironment({ ...validEnvironment, NODE_ENV: "production" }),
     ).toThrow("HTTPS");

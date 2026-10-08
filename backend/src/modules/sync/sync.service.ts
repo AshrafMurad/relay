@@ -12,7 +12,10 @@ function encodeSyncCursor(sequence: bigint) {
 
 function decodeSyncCursor(cursor: string) {
   try {
-    const parsed = syncCursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
+    if (!/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error("Invalid base64url");
+    const decoded = Buffer.from(cursor, "base64url");
+    if (decoded.toString("base64url") !== cursor) throw new Error("Non-canonical base64url");
+    const parsed = syncCursorSchema.parse(JSON.parse(decoded.toString("utf8")));
     return BigInt(parsed.sequence);
   } catch {
     throw new ApiError(400, "INVALID_CURSOR", "Sync cursor is invalid.");
@@ -47,25 +50,47 @@ export async function getWorkspaceSync(
       const member = await prisma.directConversationMember.findUnique({ where: { conversationId_userId: { conversationId: event.directConversationId, userId } }, select: { id: true } });
       if (!member) continue;
     }
-    if (event.messageId && (event.eventType.startsWith("message:") || event.eventType === "reaction:update")) {
+    if (event.messageId && event.eventType.startsWith("message:")) {
       const message = await prisma.message.findUnique({ where: { id: event.messageId }, select: messageSelect });
       if (!message) continue;
-      visible.push({ sequence: event.sequence.toString(), type: event.eventType, payload: { message: toMessageDTO(message, userId) } });
+      visible.push({
+        sequence: event.sequence.toString(),
+        type: event.eventType === "message:create" ? "message:new" : event.eventType,
+        occurredAt: event.createdAt.toISOString(),
+        data: { message: toMessageDTO(message, userId) },
+      });
+      continue;
+    }
+    if (event.messageId && event.eventType === "reaction:update") {
+      const message = await prisma.message.findUnique({ where: { id: event.messageId }, select: messageSelect });
+      if (!message) continue;
+      const hydrated = toMessageDTO(message, userId);
+      visible.push({
+        sequence: event.sequence.toString(),
+        type: event.eventType,
+        occurredAt: event.createdAt.toISOString(),
+        data: { messageId: message.id, reactions: hydrated.reactions },
+      });
       continue;
     }
     if (event.eventType === "conversation:read:update" && event.userId && event.messageId) {
       const message = await prisma.message.findUnique({ where: { id: event.messageId }, select: { id: true, channelId: true, directConversationId: true } });
       if (!message) continue;
+      const readState = message.channelId
+        ? await prisma.channelReadState.findUnique({ where: { channelId_userId: { channelId: message.channelId, userId: event.userId } } })
+        : await prisma.directConversationReadState.findUnique({ where: { directConversationId_userId: { directConversationId: message.directConversationId!, userId: event.userId } } });
+      if (!readState?.lastReadMessageId) continue;
       visible.push({
         sequence: event.sequence.toString(),
         type: event.eventType,
-        payload: {
+        occurredAt: event.createdAt.toISOString(),
+        data: {
           readState: {
             workspaceId,
             conversation: message.channelId ? { type: "channel" as const, id: message.channelId } : { type: "dm" as const, id: message.directConversationId! },
             userId: event.userId,
-            lastReadMessageId: event.messageId,
-            lastReadAt: event.createdAt.toISOString(),
+            lastReadMessageId: readState.lastReadMessageId,
+            lastReadAt: readState.lastReadAt.toISOString(),
           },
         },
       });

@@ -17,7 +17,7 @@ import {
   type SearchMessagesDTO,
 } from "./message.contracts.js";
 
-export type SyncEventType = "message:create" | "message:update" | "message:delete" | "reaction:update" | "conversation:read:update";
+export type SyncEventType = "message:new" | "message:update" | "message:delete" | "reaction:update" | "conversation:read:update";
 
 const historyCursorSchema = z.object({
   v: z.literal(1),
@@ -426,7 +426,7 @@ export async function createChannelMessage(
         select: messageSelect,
       });
       await attachPendingUploads(transaction, { attachmentIds, workspaceId: channel.workspaceId, uploaderId: authorId, messageId: message.id });
-      const event = await appendSyncEvent(transaction, { workspaceId: channel.workspaceId, eventType: "message:create", channelId: channel.id, messageId: message.id, userId: authorId });
+       const event = await appendSyncEvent(transaction, { workspaceId: channel.workspaceId, eventType: "message:new", channelId: channel.id, messageId: message.id, userId: authorId });
       const canonical = await transaction.message.findUniqueOrThrow({ where: { id: message.id }, select: messageSelect });
       return { message: toMessageDTO(canonical, authorId), created: true, sequence: event.sequence.toString() };
     });
@@ -485,7 +485,7 @@ export async function createDirectMessage(
         select: messageSelect,
       });
       await attachPendingUploads(transaction, { attachmentIds, workspaceId: conversation.workspaceId, uploaderId: authorId, messageId: message.id });
-      const event = await appendSyncEvent(transaction, { workspaceId: conversation.workspaceId, eventType: "message:create", directConversationId: conversation.id, messageId: message.id, userId: authorId });
+       const event = await appendSyncEvent(transaction, { workspaceId: conversation.workspaceId, eventType: "message:new", directConversationId: conversation.id, messageId: message.id, userId: authorId });
       const canonical = await transaction.message.findUniqueOrThrow({ where: { id: message.id }, select: messageSelect });
       return { message: toMessageDTO(canonical, authorId), created: true, sequence: event.sequence.toString() };
     });

@@ -9,6 +9,7 @@ import { ArrowRight, Bell, Hash, RadioTower, UserRound, Zap, Eye, EyeOff, LockKe
 import { Button } from "@/components/ui/button"
 import { FormField, FormStatus } from "@/components/relay/form-field"
 import { Input } from "@/components/ui/input"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { apiRequest, ApiClientError } from "@/lib/api/client"
 import type { AuthUserDTO } from "@/lib/api/contracts"
 import { cn } from "@/lib/utils"
@@ -115,6 +116,7 @@ export function AuthPage({ mode, nextPath = "/app" }: { mode: AuthMode; nextPath
   const [status, setStatus] = useState<Status>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [showPassword, setShowPassword] = useState(false)
+  const [googleTooltipOpen, setGoogleTooltipOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const isSignup = mode === "signup"
 
@@ -244,16 +246,15 @@ export function AuthPage({ mode, nextPath = "/app" }: { mode: AuthMode; nextPath
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <Button
-              className="h-12 w-full gap-5 text-base disabled:opacity-70"
-              disabled
-              title="Google sign-in is not configured yet."
-              type="button"
-              variant="outline"
-            >
-              <GoogleMark />
-              Continue with Google
-            </Button>
+            <TooltipProvider>
+              <Tooltip onOpenChange={setGoogleTooltipOpen} open={googleTooltipOpen}>
+                <TooltipTrigger render={<Button aria-label="Continue with Google, coming soon" className="h-12 w-full gap-5 text-base" onClick={() => setGoogleTooltipOpen(true)} type="button" variant="outline" />}>
+                  <GoogleMark />
+                  Continue with Google
+                </TooltipTrigger>
+                <TooltipContent side="top">Coming soon</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <p className={cn("text-center text-base text-muted-foreground", isSignup ? "mt-5" : "mt-6")}>
               {isSignup ? "Already have an account?" : "Need an account?"} {" "}

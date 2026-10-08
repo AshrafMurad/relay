@@ -224,6 +224,18 @@ export interface ConversationReadUpdateEvent {
   readState: ConversationReadStateDTO;
 }
 
+export type WorkspaceSyncEvent =
+  | { sequence: string; type: "message:new" | "message:update" | "message:delete"; occurredAt: string; data: { message: MessageDTO } }
+  | { sequence: string; type: "reaction:update"; occurredAt: string; data: { messageId: string; reactions: ReactionSummaryDTO[] } }
+  | { sequence: string; type: "conversation:read:update"; occurredAt: string; data: { readState: ConversationReadStateDTO } }
+
+export interface WorkspaceSyncResponse {
+  events: WorkspaceSyncEvent[];
+  nextCursor: string;
+  hasMore: boolean;
+  resetRequired: boolean;
+}
+
 export interface PresenceUpdateEvent {
   userId: string;
   status: "online" | "offline";

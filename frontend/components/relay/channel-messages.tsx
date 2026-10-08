@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import { AlertCircle, AtSign, CornerUpLeft, FileText, MessageSquareText, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, Smile, SmilePlus, Trash2, UserPlus, X } from "lucide-react"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
+import { AlertCircle, AtSign, CornerUpLeft, Download, FileArchive, FileJson, FileText, FileType2, ImageIcon, LoaderCircle, MessageSquareText, MoreHorizontal, Paperclip, Pencil, RotateCcw, Send, Smile, SmilePlus, Trash2, UserPlus, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -12,9 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
 import { API_BASE_URL, apiRequest } from "@/lib/api/client"
-import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, PendingAttachmentDTO, ReactionSummaryDTO, TypingUpdateEvent } from "@/lib/api/contracts"
+import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, MessageHistoryResponse, PendingAttachmentDTO, ReactionSummaryDTO, TypingUpdateEvent, WorkspaceSyncEvent, WorkspaceSyncResponse } from "@/lib/api/contracts"
 import {
   MESSAGE_CODE_POINT_LIMIT,
   createOptimisticMessage,
@@ -34,6 +35,16 @@ const ACK_TIMEOUT_MS = 10_000
 const TYPING_INACTIVITY_MS = 3_000
 const TYPING_REFRESH_MS = 3_000
 const QUICK_REACTIONS = ["👍", "✅", "👀", "❤️"]
+const MAX_ATTACHMENT_COUNT = 5
+const MAX_FILE_BYTES = 25 * 1024 * 1024
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+const ATTACHMENT_ACCEPT = ".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.csv,.json,.zip"
+const EMOJI_GROUPS = [
+  { label: "Often used", emojis: [["👍", "Thumbs up"], ["👎", "Thumbs down"], ["❤️", "Red heart"], ["😂", "Tears of joy"], ["🎉", "Party popper"], ["✅", "Check mark"], ["👀", "Eyes"], ["🙌", "Raised hands"]] },
+  { label: "People", emojis: [["😀", "Grinning face"], ["😃", "Happy face"], ["😄", "Smiling face"], ["😊", "Warm smile"], ["😍", "Heart eyes"], ["🤔", "Thinking face"], ["😅", "Nervous laugh"], ["😭", "Crying face"], ["😎", "Cool face"], ["🥳", "Party face"], ["🤯", "Mind blown"], ["😴", "Sleeping face"], ["🤝", "Handshake"], ["👏", "Clapping hands"], ["💪", "Strong arm"], ["🙏", "Thank you"]] },
+  { label: "Work", emojis: [["🚀", "Rocket"], ["💡", "Idea"], ["🔥", "Fire"], ["⚡", "Lightning"], ["🐛", "Bug"], ["🛠️", "Tools"], ["📌", "Pin"], ["📣", "Announcement"], ["📝", "Note"], ["📎", "Paperclip"], ["🔍", "Search"], ["💻", "Laptop"], ["📊", "Chart"], ["⏰", "Alarm clock"]] },
+  { label: "Symbols", emojis: [["✨", "Sparkles"], ["⭐", "Star"], ["💯", "One hundred"], ["❗", "Exclamation"], ["❓", "Question"], ["➕", "Plus"], ["➖", "Minus"], ["⬆️", "Up arrow"], ["⬇️", "Down arrow"], ["🟢", "Green circle"], ["🟡", "Yellow circle"], ["🔴", "Red circle"]] },
+] as const
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
 const dateFormatter = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" })
@@ -62,6 +73,24 @@ function ReplyPreview({ message }: { message: ClientMessage }) {
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function attachmentKind(mimeType: string) {
+  if (mimeType.startsWith("image/")) return "Image"
+  if (mimeType === "application/pdf") return "PDF"
+  if (mimeType === "application/zip") return "Archive"
+  if (mimeType === "application/json") return "JSON"
+  if (mimeType === "text/csv") return "CSV"
+  return "Text file"
+}
+
+function AttachmentIcon({ mimeType, className }: { mimeType: string; className?: string }) {
+  const props = { className: cn("size-4", className), "aria-hidden": true }
+  if (mimeType.startsWith("image/")) return <ImageIcon {...props} />
+  if (mimeType === "application/zip") return <FileArchive {...props} />
+  if (mimeType === "application/json") return <FileJson {...props} />
+  if (mimeType === "application/pdf") return <FileType2 {...props} />
+  return <FileText {...props} />
 }
 
 function MessageRow({
@@ -142,11 +171,12 @@ function MessageRow({
           <p className="text-body max-w-[72ch] whitespace-pre-wrap break-words">{message.content}</p>
         )}
         {message.attachments.length > 0 && !message.deletedAt && (
-          <div className="mt-2 flex max-w-[72ch] flex-wrap gap-2">
+          <div className="mt-2 grid max-w-[40rem] grid-cols-1 gap-1.5 sm:grid-cols-2">
             {message.attachments.map((attachment) => (
-              <a className="group/file inline-flex min-h-12 min-w-0 max-w-[32rem] items-center gap-2.5 rounded-md border border-signal-line bg-signal-surface px-3 py-2 transition-colors duration-150 hover:border-signal-muted hover:bg-signal-surface-raised/50 focus-visible:border-signal-cyan" href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id} rel="noreferrer" target="_blank">
-                <span className="grid size-8 shrink-0 place-items-center rounded-md bg-signal-surface-raised text-signal-muted"><FileText className="size-4" /></span>
-                <span className="min-w-0"><span className="block truncate text-xs font-semibold text-signal-ink group-hover/file:underline">{attachment.originalFilename}</span><span className="text-metadata mt-0.5 block text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span></span>
+              <a aria-label={`Download ${attachment.originalFilename}`} className="group/file flex min-h-14 min-w-0 items-center gap-2.5 rounded-md border border-signal-line bg-signal-surface px-2.5 py-2 transition-colors duration-150 hover:border-signal-muted hover:bg-signal-surface-raised/50 focus-visible:border-signal-muted" download={attachment.originalFilename} href={`${API_BASE_URL}${attachment.downloadUrl}`} key={attachment.id}>
+                <span className="grid size-9 shrink-0 place-items-center rounded-md bg-signal-surface-raised text-signal-muted"><AttachmentIcon mimeType={attachment.mimeType} /></span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-signal-ink group-hover/file:underline">{attachment.originalFilename}</span><span className="text-metadata mt-0.5 block text-signal-muted">{attachmentKind(attachment.mimeType)} · {formatFileSize(attachment.sizeBytes)}</span></span>
+                <Download className="size-3.5 shrink-0 text-signal-muted transition-colors duration-150 group-hover/file:text-signal-ink" />
               </a>
             ))}
           </div>
@@ -209,6 +239,8 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
   const [draft, setDraft] = useState("")
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachmentDTO[]>([])
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [composerError, setComposerError] = useState("")
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null)
   const [socketState, setSocketState] = useState<SocketState>("connecting")
@@ -223,6 +255,9 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
   const typingStopTimeout = useRef<number | null>(null)
   const lastTypingStart = useRef(0)
   const composerRef = useRef<HTMLTextAreaElement>(null)
+  const syncCursor = useRef<string | null>(null)
+  const syncRequest = useRef<Promise<void> | null>(null)
+  const syncTimeout = useRef<number | null>(null)
   const archived = target.type === "channel" && Boolean(target.channel.archivedAt)
   const conversationId = target.type === "channel" ? target.channel.id : target.conversation.id
   const workspaceId = target.type === "channel" ? target.channel.workspaceId : target.conversation.workspaceId
@@ -235,11 +270,67 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
   const reportReadState = useEffectEvent((readState: ConversationReadStateDTO) => onReadState?.(readState))
   const reportPresence = useEffectEvent((userId: string, status: "online" | "offline") => onPresence?.(userId, status))
 
+  const applySyncEvent = useCallback((event: WorkspaceSyncEvent) => {
+    if (event.type === "message:new" || event.type === "message:update" || event.type === "message:delete") {
+      const message = event.data.message
+      const belongsHere = target.type === "channel" ? message.channelId === conversationId : message.directConversationId === conversationId
+      if (!belongsHere) return
+      setMessages((current) => event.type === "message:new" ? mergeMessages(current, [message]) : reconcileMessageUpdate(current, message))
+      if (event.type === "message:new") onActivity?.({ type: target.type, id: conversationId }, message)
+      return
+    }
+    if (event.type === "reaction:update") {
+      setMessages((current) => current.map((message) => message.id === event.data.messageId ? { ...message, reactions: event.data.reactions } : message))
+      return
+    }
+    if (event.type !== "conversation:read:update") return
+    const readState = event.data.readState
+    if (readState.conversation.type !== target.type || readState.conversation.id !== conversationId) return
+    if (readState.userId === user.id) setLastReadMessageId(readState.lastReadMessageId)
+    onReadState?.(readState)
+  }, [conversationId, onActivity, onReadState, target.type, user.id])
+
+  const synchronizeWorkspace = useCallback(async () => {
+    if (syncRequest.current) return syncRequest.current
+    const request = (async () => {
+      const storageKey = `relay:sync:${workspaceId}`
+      let cursor = syncCursor.current ?? window.localStorage.getItem(storageKey)
+      if (!cursor) {
+        const checkpoint = await apiRequest<WorkspaceSyncResponse>(`/workspaces/${workspaceId}/sync`)
+        cursor = checkpoint.nextCursor
+        syncCursor.current = cursor
+        window.localStorage.setItem(storageKey, cursor)
+        return
+      }
+      let certifiedCursor: string = cursor
+      let hasMore = true
+      while (hasMore) {
+        const response: WorkspaceSyncResponse = await apiRequest<WorkspaceSyncResponse>(`/workspaces/${workspaceId}/sync?after=${encodeURIComponent(certifiedCursor)}&limit=200`)
+        for (const event of response.events) applySyncEvent(event)
+        certifiedCursor = response.nextCursor
+        syncCursor.current = certifiedCursor
+        window.localStorage.setItem(storageKey, certifiedCursor)
+        hasMore = response.hasMore
+      }
+    })().finally(() => { syncRequest.current = null })
+    syncRequest.current = request
+    return request
+  }, [applySyncEvent, workspaceId])
+
+  const scheduleSynchronization = useCallback(() => {
+    if (syncTimeout.current) window.clearTimeout(syncTimeout.current)
+    syncTimeout.current = window.setTimeout(() => {
+      syncTimeout.current = null
+      void synchronizeWorkspace().catch(() => undefined)
+    }, 250)
+  }, [synchronizeWorkspace])
+
   async function loadInitial() {
     const request = ++initialRequest.current
     setHistoryState("loading")
     setHistoryError("")
     try {
+      await synchronizeWorkspace()
       const response = await apiRequest<MessageHistoryResponse>(`${historyPath}?limit=50`)
       if (request !== initialRequest.current) return
       setMessages((current) => mergeMessages(response.messages, current.filter((message) => target.type === "channel" ? message.channelId === conversationId : message.directConversationId === conversationId)))
@@ -274,7 +365,10 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
     function joinChannel() {
       setSocketState("connected")
       socket.emit("conversation:join", joinEvent, (event) => {
-        if ("ok" in event) return
+        if ("ok" in event) {
+          void synchronizeWorkspace().catch(() => undefined)
+          return
+        }
         setComposerError(event.message)
       })
     }
@@ -288,21 +382,25 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       shouldScrollToBottom.current = true
       setMessages((current) => replaceMessage(current, event.message))
       reportActivity(event.message)
+      scheduleSynchronization()
     })
     socket.on("message:new", (event) => {
       if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
       shouldScrollToBottom.current = true
       setMessages((current) => mergeMessages(current, [event.message]))
       reportActivity(event.message)
+      scheduleSynchronization()
     })
     socket.on("reaction:update", (event) => {
       if (event.conversation.type !== target.type || event.conversation.id !== conversationId) return
       setMessages((current) => current.map((message) => message.id === event.messageId ? { ...message, reactions: event.reactions } : message))
+      scheduleSynchronization()
     })
     socket.on("conversation:read:update", (event) => {
       if (event.readState.conversation.type !== target.type || event.readState.conversation.id !== conversationId) return
       if (event.readState.userId === user.id) setLastReadMessageId(event.readState.lastReadMessageId)
       reportReadState(event.readState)
+      scheduleSynchronization()
     })
     socket.on("presence:update", (event) => reportPresence(event.userId, event.status))
     socket.on("typing:update", (event) => {
@@ -330,12 +428,13 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       socket.emit("conversation:leave", joinEvent)
       socket.emit("typing:stop", joinEvent)
       if (typingStopTimeout.current) window.clearTimeout(typingStopTimeout.current)
+      if (syncTimeout.current) window.clearTimeout(syncTimeout.current)
       pending.forEach((timeout) => window.clearTimeout(timeout))
       pending.clear()
       socket.disconnect()
       socketRef.current = null
     }
-  }, [archived, conversationId, workspaceId, target.type, user.id])
+  }, [archived, conversationId, scheduleSynchronization, synchronizeWorkspace, workspaceId, target.type, user.id])
 
   useEffect(() => {
     if (historyState !== "ready" || messages.length === 0) return
@@ -455,24 +554,66 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
     sendMessage(optimistic)
   }
 
-  async function uploadAttachment(file: File) {
-    if (pendingAttachments.length >= 5) {
-      setComposerError("A message can include at most 5 attachments.")
+  async function uploadAttachments(files: File[]) {
+    if (files.length === 0) return
+    if (pendingAttachments.length + files.length > MAX_ATTACHMENT_COUNT) {
+      setComposerError(`A message can include at most ${MAX_ATTACHMENT_COUNT} attachments.`)
+      return
+    }
+    const oversizedFile = files.find((file) => file.size > MAX_FILE_BYTES)
+    if (oversizedFile) {
+      setComposerError(`${oversizedFile.name} exceeds the 25 MB file limit.`)
+      return
+    }
+    const combinedBytes = pendingAttachments.reduce((total, attachment) => total + attachment.sizeBytes, 0) + files.reduce((total, file) => total + file.size, 0)
+    if (combinedBytes > MAX_ATTACHMENT_BYTES) {
+      setComposerError("Attachments can total at most 50 MB per message.")
       return
     }
     setUploadingAttachment(true)
     setComposerError("")
     try {
-      const form = new FormData()
-      form.set("workspaceId", workspaceId)
-      form.set("file", file)
-      const response = await apiRequest<{ attachment: PendingAttachmentDTO }>("/attachments", { method: "POST", body: form })
-      setPendingAttachments((current) => [...current, response.attachment])
+      for (const [index, file] of files.entries()) {
+        setUploadProgress({ current: index + 1, total: files.length })
+        const form = new FormData()
+        form.set("workspaceId", workspaceId)
+        form.set("file", file)
+        const response = await apiRequest<{ attachment: PendingAttachmentDTO }>("/attachments", { method: "POST", body: form })
+        setPendingAttachments((current) => [...current, response.attachment])
+      }
     } catch (caught) {
       setComposerError(messageError(caught, "File could not be uploaded."))
     } finally {
       setUploadingAttachment(false)
+      setUploadProgress(null)
     }
+  }
+
+  function insertComposerText(value: string, cursorOffset = value.length) {
+    const composer = composerRef.current
+    const start = composer?.selectionStart ?? draft.length
+    const end = composer?.selectionEnd ?? start
+    setDraft((current) => `${current.slice(0, start)}${value}${current.slice(end)}`)
+    window.requestAnimationFrame(() => {
+      composerRef.current?.focus()
+      composerRef.current?.setSelectionRange(start + cursorOffset, start + cursorOffset)
+    })
+  }
+
+  function insertEmoji(emoji: string) {
+    insertComposerText(emoji)
+    setEmojiPickerOpen(false)
+  }
+
+  function insertMentionTrigger() {
+    const composer = composerRef.current
+    const start = composer?.selectionStart ?? draft.length
+    const end = composer?.selectionEnd ?? start
+    const before = draft.slice(0, start)
+    const after = draft.slice(end)
+    const prefix = before.length > 0 && !/\s$/.test(before) ? " " : ""
+    const suffix = after.length > 0 && !/^\s/.test(after) ? " " : ""
+    insertComposerText(`${prefix}@${suffix}`, prefix.length + 1)
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -604,54 +745,72 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
         )}
       </div>
 
-      <div className="shrink-0 border-t border-signal-line bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-5">
+      <div className="shrink-0 border-t border-signal-line bg-background px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-5 sm:pb-3">
         {archived ? (
           <div className="mx-auto max-w-6xl rounded-md border border-signal-line bg-signal-surface px-3 py-2.5 text-xs text-signal-muted"><span className="font-semibold text-signal-ink">Read-only archive.</span> This channel history remains available, but messages, replies, reactions, and attachments are closed.</div>
         ) : (
           <div className="mx-auto max-w-6xl">
             {replyingTo && (
-              <div className="text-helper flex items-center gap-2 rounded-t-lg border border-b-0 border-signal-line bg-signal-surface-raised px-3 py-2">
+              <div className="text-helper flex items-center gap-2 rounded-t-lg border border-b-0 border-signal-line bg-signal-surface px-3 py-1.5">
                 <CornerUpLeft className="size-3 text-signal-muted" />
                 <p className="min-w-0 flex-1 truncate"><span className="font-semibold">Replying to {replyingTo.author.name}</span><span className="text-signal-muted"> · {replyingTo.deletedAt ? "Message deleted" : replyingTo.content}</span></p>
                 <Button aria-label="Cancel reply" onClick={() => setReplyingTo(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
               </div>
             )}
-            <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface transition-[border-color,box-shadow] duration-150 focus-within:border-signal-cyan focus-within:ring-2 focus-within:ring-signal-cyan/10", replyingTo && "rounded-t-none")}>
-              {typingUsers.length > 0 && <p className="text-helper border-b border-signal-line px-3 py-1.5 text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
+            <div className={cn("overflow-hidden rounded-lg border border-signal-line bg-signal-surface transition-colors duration-150 focus-within:border-signal-muted", replyingTo && "rounded-t-none")}>
+              {typingUsers.length > 0 && <p className="text-helper border-b border-signal-line px-3 py-1 text-signal-muted" aria-live="polite"><span className="mr-1 inline-flex gap-0.5 align-middle"><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /><span className="size-1 rounded-full bg-signal-cyan" /></span>{typingUsers.map((item) => item.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing</p>}
               <Textarea
                 ref={composerRef}
                 aria-label={`Message ${title}`}
                 aria-describedby={composerError ? "composer-error" : undefined}
                 aria-invalid={Boolean(composerError) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT}
-                className="min-h-14 max-h-48 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-sm font-normal leading-5 shadow-none placeholder:text-signal-muted focus-visible:border-0 focus-visible:ring-0"
+                className="min-h-11 max-h-40 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-3 py-2.5 text-sm font-normal leading-5 shadow-none transition-none placeholder:text-signal-muted focus-visible:border-0 focus-visible:ring-0"
                 onBlur={() => socketRef.current?.emit("typing:stop", { workspaceId, conversation: { type: target.type, id: conversationId } })}
                 onChange={(event) => { setDraft(event.target.value); if (composerError) setComposerError(""); emitTypingStart() }}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={`Message ${title}`}
                 value={draft}
               />
-              {pendingAttachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 border-t border-signal-line px-3 py-2">
+              {(pendingAttachments.length > 0 || uploadingAttachment) && (
+                <div className="flex flex-wrap gap-1.5 border-t border-signal-line px-3 py-2">
                   {pendingAttachments.map((attachment) => (
-                    <span className="text-helper inline-flex min-h-8 items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1" key={attachment.id}>
-                      <FileText className="size-3.5 text-signal-muted" />
-                      <span className="max-w-40 truncate font-medium">{attachment.originalFilename}</span>
-                      <button aria-label={`Remove ${attachment.originalFilename}`} className="grid size-5 place-items-center rounded-sm text-signal-muted transition-colors hover:bg-destructive/10 hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button"><X className="size-3" /></button>
+                    <span className="text-helper inline-flex min-h-9 max-w-full items-center gap-2 rounded-md border border-signal-line bg-signal-paper px-2 py-1" key={attachment.id}>
+                      <AttachmentIcon className="text-signal-muted" mimeType={attachment.mimeType} />
+                      <span className="min-w-0 max-w-44"><span className="block truncate font-medium">{attachment.originalFilename}</span><span className="text-metadata block text-signal-muted">{formatFileSize(attachment.sizeBytes)}</span></span>
+                      <button aria-label={`Remove ${attachment.originalFilename}`} className="grid size-6 shrink-0 place-items-center rounded-sm text-signal-muted transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive" onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))} type="button"><X className="size-3" /></button>
                     </span>
                   ))}
+                  {uploadProgress && <span className="text-helper inline-flex min-h-9 items-center gap-2 rounded-md border border-dashed border-signal-line px-2.5 py-1 text-signal-muted" role="status"><LoaderCircle className="size-3.5 animate-spin" />Uploading {uploadProgress.current} of {uploadProgress.total}</span>}
                 </div>
               )}
-              <div className="flex min-h-10 items-center gap-1 border-t border-signal-line px-2.5">
-                <label aria-label="Attach a file" className={cn("inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-signal-muted transition-colors duration-150 hover:bg-signal-surface-raised hover:text-signal-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-signal-cyan", uploadingAttachment && "pointer-events-none opacity-50")}>
-                  <Paperclip className="size-3.5" />
-                  <input className="sr-only" disabled={uploadingAttachment || pendingAttachments.length >= 5} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.currentTarget.value = "" }} type="file" />
-                </label>
-                <Button aria-label="Add emoji" onClick={() => { setDraft((current) => `${current}🙂`); composerRef.current?.focus() }} size="icon-sm" type="button" variant="ghost"><Smile /></Button>
-                <Button aria-label="Mention someone" onClick={() => { setDraft((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}@`); composerRef.current?.focus() }} size="icon-sm" type="button" variant="ghost"><AtSign /></Button>
-                <span className="mx-1 h-4 w-px bg-signal-line" />
-                <span className={cn("text-metadata hidden text-signal-muted sm:inline", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
-                <span className={cn("text-metadata ml-auto inline-flex items-center gap-1.5", socketState === "connected" ? "text-signal-cyan-ink" : "text-signal-muted")} aria-live="polite"><span className={cn("size-1.5 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} />{connectionCopy}</span>
-                <Button aria-label="Send message" className="ml-2 size-7 bg-signal-amber text-signal-carbon hover:bg-signal-amber/90" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-xs" type="button"><Send /></Button>
+              <div className="flex min-h-9 items-center justify-between gap-2 border-t border-signal-line px-2 py-1">
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <label aria-label="Attach a file" className={cn("inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-signal-muted transition-colors duration-150 hover:bg-signal-surface-raised hover:text-signal-ink focus-within:outline-none focus-within:ring-2 focus-within:ring-signal-muted/35", uploadingAttachment && "pointer-events-none opacity-50")}>
+                    <Paperclip className="size-3.5" />
+                    <input accept={ATTACHMENT_ACCEPT} className="sr-only" disabled={uploadingAttachment || pendingAttachments.length >= MAX_ATTACHMENT_COUNT} multiple onChange={(event) => { void uploadAttachments(Array.from(event.target.files ?? [])); event.currentTarget.value = "" }} type="file" />
+                  </label>
+                  <Popover onOpenChange={setEmojiPickerOpen} open={emojiPickerOpen}>
+                    <PopoverTrigger render={<Button aria-label="Add emoji" className="text-signal-muted hover:text-signal-ink data-[popup-open]:bg-signal-surface-raised data-[popup-open]:text-signal-ink [&_svg]:size-3.5" size="icon-sm" type="button" variant="ghost" />}><Smile /></PopoverTrigger>
+                    <PopoverContent align="start" className="max-h-[min(22rem,60dvh)] w-[min(20rem,calc(100vw-1.5rem))] gap-3 overflow-y-auto border border-signal-line bg-signal-paper p-2.5 shadow-md ring-0" side="top" sideOffset={8}>
+                      <PopoverTitle className="text-xs font-semibold">Choose an emoji</PopoverTitle>
+                      {EMOJI_GROUPS.map((group) => (
+                        <div key={group.label}>
+                          <p className="text-metadata mb-1.5 text-signal-muted">{group.label}</p>
+                          <div className="grid grid-cols-8 gap-0.5">
+                            {group.emojis.map(([emoji, label]) => <button aria-label={label} className="grid aspect-square min-h-8 place-items-center rounded-md text-lg leading-none transition-colors duration-150 hover:bg-signal-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-muted/40" key={emoji} onClick={() => insertEmoji(emoji)} title={label} type="button">{emoji}</button>)}
+                          </div>
+                        </div>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                  <Button aria-label="Mention someone" className="text-signal-muted hover:text-signal-ink [&_svg]:size-3.5" onClick={insertMentionTrigger} size="icon-sm" type="button" variant="ghost"><AtSign /></Button>
+                </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn("text-metadata tabular-nums text-signal-muted opacity-60 transition-colors duration-150", draftCodePoints > MESSAGE_CODE_POINT_LIMIT && "text-destructive opacity-100")}>{draftCodePoints}/{MESSAGE_CODE_POINT_LIMIT}</span>
+                  <span className="h-3.5 w-px shrink-0 bg-signal-line" />
+                  <span className="text-metadata inline-flex min-w-0 items-center gap-1 text-signal-muted" aria-live="polite"><span className={cn("size-1 shrink-0 rounded-full", socketState === "connected" ? "bg-signal-cyan" : socketState === "connecting" ? "bg-signal-amber" : "bg-destructive")} /><span className="truncate">{connectionCopy}</span></span>
+                  <Button aria-label="Send message" className="ml-0.5 size-8 bg-signal-amber text-signal-carbon transition-colors duration-150 hover:bg-signal-amber/85 focus-visible:border-signal-amber focus-visible:ring-signal-amber/25 [&_svg]:size-3.5" disabled={(!draft.trim() && pendingAttachments.length === 0) || draftCodePoints > MESSAGE_CODE_POINT_LIMIT || uploadingAttachment} onClick={submitMessage} size="icon-sm" type="button"><Send /></Button>
+                </div>
               </div>
             </div>
             {composerError && <p className="text-helper mt-1.5 text-destructive" id="composer-error" role="alert">{composerError}</p>}

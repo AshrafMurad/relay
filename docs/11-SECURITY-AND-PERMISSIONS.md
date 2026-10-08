@@ -6,20 +6,16 @@ No user should be able to access data or real-time events outside workspaces and
 
 ## 2. Authentication
 
-- Better Auth is hosted by Express.
-- Email/password and Google OAuth are supported.
-- Email/password sign-in requires verified email.
-- Passwords contain 12 to 128 characters and use Better Auth's scrypt hashing.
+- Database-backed email/password authentication is hosted by Express.
+- Passwords contain 6 to 128 characters and use scrypt hashing.
 - Sessions are opaque, stored in PostgreSQL, and expire after 7 days with a 24-hour refresh interval.
 - Cookie session caching is disabled so revocation is immediate.
 - Session cookies are HttpOnly, Secure in production, SameSite=Lax, and host-only.
 - Session validation on HTTP requests.
 - Session validation during WebSocket handshake.
 - Session validation again after every socket reconnect.
-- Password reset revokes every existing session for the user.
-- Google requests only `openid`, `email`, and `profile`; Relay does not request offline access.
-- Stored OAuth tokens use Better Auth's token encryption derived from `BETTER_AUTH_SECRET`.
-- Password/email changes, provider linking/unlinking, and revoking all other sessions require a session no older than 15 minutes.
+- Email verification, password reset, and Google OAuth are not part of the current product scope.
+- Password/email changes and revoking all other sessions require a session no older than 15 minutes.
 - A stale session receives `SESSION_NOT_FRESH` and must reauthenticate before retrying the protected action.
 
 ## 3. Authorization Layers
@@ -104,7 +100,6 @@ Do not log:
 - raw auth tokens;
 - secure cookies;
 - private file URLs with long-lived credentials.
-- email verification and password-reset links or tokens.
 - OAuth access, refresh, or ID tokens.
 
 ## 11. Auditability

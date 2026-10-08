@@ -95,6 +95,31 @@ export function createSocketServer(
     },
   });
 
+  async function authorizedConversationSockets(conversation: { type: "channel" | "dm"; id: string; workspaceId: string; room: string }) {
+    const sockets = await io.in(conversation.room).fetchSockets();
+    if (!prisma || sockets.length === 0) return [];
+    const userIds = [...new Set(sockets.flatMap((candidate) => candidate.data.userId ? [candidate.data.userId] : []))];
+    const activeMembers = await prisma.workspaceMember.findMany({
+      where: { workspaceId: conversation.workspaceId, userId: { in: userIds }, status: "ACTIVE" },
+      select: { userId: true },
+    });
+    const authorizedUserIds = new Set(activeMembers.map((member) => member.userId));
+    if (conversation.type === "dm") {
+      const directMembers = await prisma.directConversationMember.findMany({
+        where: { conversationId: conversation.id, userId: { in: [...authorizedUserIds] } },
+        select: { userId: true },
+      });
+      const directMemberIds = new Set(directMembers.map((member) => member.userId));
+      for (const userId of authorizedUserIds) {
+        if (!directMemberIds.has(userId)) authorizedUserIds.delete(userId);
+      }
+    }
+    await Promise.all(sockets.map(async (candidate) => {
+      if (!candidate.data.userId || !authorizedUserIds.has(candidate.data.userId)) await candidate.leave(conversation.room);
+    }));
+    return sockets.filter((candidate) => candidate.data.userId && authorizedUserIds.has(candidate.data.userId));
+  }
+
   if (prisma) {
     io.use(async (socket, next) => {
       try {
@@ -216,7 +241,10 @@ export function createSocketServer(
         const sequence = result.sequence ?? fallbackMessageSequence(result.message);
         socket.emit("message:ack", { operationId: result.message.operationId, sequence, message: result.message });
         if (result.created) {
-          socket.to(conversation.room).emit("message:new", { sequence, message: result.message });
+          const recipients = await authorizedConversationSockets(conversation);
+          for (const recipient of recipients) {
+            if (recipient.id !== socket.id) recipient.emit("message:new", { sequence, message: result.message });
+          }
         }
         stopTyping(event);
       } catch (error) {
@@ -236,13 +264,16 @@ export function createSocketServer(
         if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Socket event data is invalid.");
         const result = await toggleMessageReaction(prisma, event.messageId, socket.data.userId, parsed.data);
         if (result.conversation.workspaceId !== event.workspaceId) throw new ApiError(404, "MESSAGE_NOT_FOUND", "Message was not found.");
-        io.to(result.conversation.room).emit("reaction:update", {
-          sequence: result.sequence,
-          workspaceId: result.conversation.workspaceId,
-          conversation: { type: result.conversation.type, id: result.conversation.id },
-          messageId: result.messageId,
-          reactions: result.reactions,
-        });
+        const recipients = await authorizedConversationSockets(result.conversation);
+        for (const recipient of recipients) {
+          recipient.emit("reaction:update", {
+            sequence: result.sequence,
+            workspaceId: result.conversation.workspaceId,
+            conversation: { type: result.conversation.type, id: result.conversation.id },
+            messageId: result.messageId,
+            reactions: result.reactions,
+          });
+        }
       } catch (error) {
         socket.emit("message:error", socketError(error));
       }
@@ -260,10 +291,13 @@ export function createSocketServer(
         const readState = conversation.type === "channel"
           ? await markChannelRead(prisma, conversation.id, socket.data.userId, parsed.data)
           : await markDirectConversationRead(prisma, conversation.id, socket.data.userId, parsed.data);
-        io.to(conversation.room).emit("conversation:read:update", {
-          sequence: `${readState.lastReadAt}:${readState.userId}:read`,
-          readState,
-        });
+        const recipients = await authorizedConversationSockets(conversation);
+        for (const recipient of recipients) {
+          recipient.emit("conversation:read:update", {
+            sequence: `${readState.lastReadAt}:${readState.userId}:read`,
+            readState,
+          });
+        }
       } catch (error) {
         socket.emit("message:error", socketError(error));
       }

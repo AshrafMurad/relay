@@ -228,4 +228,28 @@ describe("real-time channel messaging", () => {
       await close(httpServer, io);
     }
   }, 20_000);
+
+  it("stops delivering conversation broadcasts after membership removal", async () => {
+    const { httpServer, io, url } = await listen();
+    const sender = await connect(url, 0);
+    const removedMember = await connect(url, 1);
+    try {
+      await expect(join(sender)).resolves.toEqual({ ok: true });
+      await expect(join(removedMember)).resolves.toEqual({ ok: true });
+      await database.prisma.workspaceMember.update({
+        where: { workspaceId_userId: { workspaceId, userId: userIds[1]! } },
+        data: { status: "REMOVED", removedAt: new Date(), removedById: userIds[0] },
+      });
+      const received: unknown[] = [];
+      removedMember.on("message:new", (event) => received.push(event));
+      sender.emit("message:send", { operationId: randomUUID(), workspaceId, conversation: { type: "channel", id: channelId }, content: "private after removal" });
+      await new Promise<MessageAckEvent>((resolve) => sender.once("message:ack", resolve));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(received).toEqual([]);
+    } finally {
+      sender.close();
+      removedMember.close();
+      await close(httpServer, io);
+    }
+  });
 });

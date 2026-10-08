@@ -7,12 +7,10 @@ Build a production-minded real-time team communication application with enough d
 ## 2. Included Features
 
 ### Authentication
-- Email/password sign up with required email verification.
+- Email/password sign up.
 - Email/password sign in.
-- Google OAuth sign in.
 - Sign out.
 - Database-backed session management.
-- Password reset.
 - Basic profile management.
 
 ### Workspaces

@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { AuthUserDTO, ChannelDTO, ConversationReadUpdateEvent, MessageAckEvent, MessageDTO, MessageNewEvent, MessageSendEvent, ReactionUpdateEvent } from "@/lib/api/contracts"
 import { apiRequest } from "@/lib/api/client"
@@ -84,22 +84,30 @@ function message(id: string, content: string, createdAt: string): MessageDTO {
   }
 }
 
+function mockMessageHistory(messages: MessageDTO[] = []) {
+  vi.mocked(apiRequest).mockImplementation((path) => {
+    if (typeof path === "string" && path.includes("/sync")) return Promise.resolve({ events: [], nextCursor: "0", hasMore: false }) as never
+    return Promise.resolve({ messages, nextCursor: null, hasMore: false }) as never
+  })
+}
+
+beforeEach(() => {
+  window.localStorage.clear()
+})
+
 afterEach(() => {
   cleanup()
+  window.localStorage.clear()
   vi.clearAllMocks()
 })
 
 describe("ChannelMessages", () => {
   it("renders canonical history oldest first and provides a composer", async () => {
     mockSocket()
-    vi.mocked(apiRequest).mockResolvedValue({
-      messages: [
-        message("newer", "Second message", "2026-01-02T00:00:00.000Z"),
-        message("older", "First message", "2026-01-01T00:00:00.000Z"),
-      ],
-      nextCursor: null,
-      hasMore: false,
-    })
+    mockMessageHistory([
+      message("newer", "Second message", "2026-01-02T00:00:00.000Z"),
+      message("older", "First message", "2026-01-01T00:00:00.000Z"),
+    ])
 
     render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
 
@@ -109,7 +117,7 @@ describe("ChannelMessages", () => {
   })
 
   it("keeps archived history readable without rendering write controls", async () => {
-    vi.mocked(apiRequest).mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
+    mockMessageHistory()
 
     render(<ChannelMessages target={{ type: "channel", channel: channel(true) }} user={user} />)
 
@@ -117,9 +125,37 @@ describe("ChannelMessages", () => {
     expect(screen.queryByRole("textbox")).toBeNull()
   })
 
+  it("inserts an emoji selected from the composer palette", async () => {
+    const userEvents = userEvent.setup()
+    mockSocket()
+    mockMessageHistory()
+
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+    const composer = await screen.findByPlaceholderText("Message #general")
+    await userEvents.click(screen.getByLabelText("Add emoji"))
+    await userEvents.click(screen.getByRole("button", { name: "Rocket" }))
+
+    expect((composer as HTMLTextAreaElement).value).toBe("🚀")
+  })
+
+  it("inserts a mention trigger at the composer cursor", async () => {
+    const userEvents = userEvent.setup()
+    mockSocket()
+    mockMessageHistory()
+
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+    const composer = await screen.findByPlaceholderText("Message #general") as HTMLTextAreaElement
+    await userEvents.type(composer, "Hello world")
+    composer.setSelectionRange(5, 5)
+    await userEvents.click(screen.getByLabelText("Mention someone"))
+
+    await waitFor(() => expect(composer.value).toBe("Hello @ world"))
+    expect(composer.selectionStart).toBe(7)
+  })
+
   it("adds messages delivered by the channel socket", async () => {
     const { handlers } = mockSocket()
-    vi.mocked(apiRequest).mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
+    mockMessageHistory()
 
     render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
     await screen.findByRole("log", { name: "Message history for #general" })
@@ -135,7 +171,7 @@ describe("ChannelMessages", () => {
   it("sends over the socket and reconciles the optimistic message from the ack", async () => {
     const userEvents = userEvent.setup()
     const { handlers, sent } = mockSocket()
-    vi.mocked(apiRequest).mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
+    mockMessageHistory()
 
     render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
     await userEvents.type(await screen.findByPlaceholderText("Message #general"), "Socket hello")
@@ -155,12 +191,11 @@ describe("ChannelMessages", () => {
     expect(screen.getByText("Socket hello")).toBeTruthy()
   })
 
-  it("sends an attachment-only message after upload", async () => {
+  it("uploads multiple files and sends them in one attachment-only message", async () => {
     const userEvents = userEvent.setup()
     const { sent } = mockSocket()
-    vi.mocked(apiRequest)
-      .mockResolvedValueOnce({ messages: [], nextCursor: null, hasMore: false })
-      .mockResolvedValueOnce({
+    const attachmentResponses = [
+      {
         attachment: {
           id: "11111111-1111-4111-8111-111111111111",
           workspaceId: "workspace-1",
@@ -170,14 +205,57 @@ describe("ChannelMessages", () => {
           createdAt: "2026-01-01T00:00:00.000Z",
           expiresAt: "2026-01-02T00:00:00.000Z",
         },
-      })
+      },
+      {
+        attachment: {
+          id: "22222222-2222-4222-8222-222222222222",
+          workspaceId: "workspace-1",
+          originalFilename: "data.json",
+          mimeType: "application/json",
+          sizeBytes: 18,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          expiresAt: "2026-01-02T00:00:00.000Z",
+        },
+      },
+    ]
+    vi.mocked(apiRequest).mockImplementation((path) => {
+      if (typeof path === "string" && path.includes("/sync")) return Promise.resolve({ events: [], nextCursor: "0", hasMore: false }) as never
+      if (path === "/attachments") return Promise.resolve(attachmentResponses.shift()) as never
+      return Promise.resolve({ messages: [], nextCursor: null, hasMore: false }) as never
+    })
 
     render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
     await screen.findByRole("log", { name: "Message history for #general" })
-    await userEvents.upload(screen.getByLabelText(/attach/i), new File(["hello"], "notes.txt", { type: "text/plain" }))
+    await userEvents.upload(screen.getByLabelText(/attach/i), [
+      new File(["hello"], "notes.txt", { type: "text/plain" }),
+      new File(["{\"ok\":true}"], "data.json", { type: "application/json" }),
+    ])
     await screen.findByText("notes.txt")
+    await screen.findByText("data.json")
     await userEvents.click(screen.getByLabelText("Send message"))
 
-    expect(sent[0]).toMatchObject({ content: "", attachmentIds: ["11111111-1111-4111-8111-111111111111"] })
+    expect(sent[0]).toMatchObject({ content: "", attachmentIds: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"] })
+  })
+
+  it("recovers a missed durable message from the certified workspace cursor", async () => {
+    mockSocket()
+    window.localStorage.setItem("relay:sync:workspace-1", "previous-checkpoint")
+    const recovered = { ...message("recovered", "Recovered after reconnect", "2026-01-05T00:00:00.000Z"), author: { id: "user-2", name: "Grace Hopper", image: null } }
+    vi.mocked(apiRequest).mockImplementation((path) => {
+      if (typeof path === "string" && path.includes("/sync")) {
+        return Promise.resolve({
+          events: [{ sequence: "9", type: "message:new", occurredAt: recovered.createdAt, data: { message: recovered } }],
+          nextCursor: "current-checkpoint",
+          hasMore: false,
+          resetRequired: false,
+        }) as never
+      }
+      return Promise.resolve({ messages: [], nextCursor: null, hasMore: false }) as never
+    })
+
+    render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+
+    expect(await screen.findByText("Recovered after reconnect")).toBeTruthy()
+    expect(window.localStorage.getItem("relay:sync:workspace-1")).toBe("current-checkpoint")
   })
 })

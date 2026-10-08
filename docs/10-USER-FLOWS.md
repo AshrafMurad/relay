@@ -5,7 +5,6 @@
 ```text
 Landing
 → Sign Up / Sign In
-→ Verify Email When Required
 → Invitation Pending? Continue Invitation
 → Otherwise Load Active Memberships
 → Enter Last-Used or Sole Workspace
@@ -13,7 +12,7 @@ Landing
 → Or, With No Memberships, Create or Join
 ```
 
-Creating a workspace atomically creates the Owner membership and default `general` channel, then enters the workspace directly. Joining requires an invitation link. Email/password registration inserts an email-verification step before profile/workspace access. Google OAuth returns directly to the pending-invitation or workspace decision after the verified provider callback. A verified Google account and verified credential account with the same email resolve to one Relay user.
+Creating a workspace atomically creates the Owner membership and default `general` channel, then enters the workspace directly. Joining requires an invitation link. Email/password registration returns directly to the pending invitation or workspace decision.
 
 ## 2. Invitation Flow
 

@@ -8,28 +8,17 @@ These decisions do not mean the feature has been implemented.
 
 ## 2. Authentication
 
-Relay uses Better Auth owned and hosted by the Express backend.
+Relay uses database-backed email and password authentication owned and hosted by the Express backend.
 
 Supported sign-in methods:
 
-- email and password;
-- Google OAuth.
+- email and password.
 
 Authentication rules:
 
-- Email/password accounts must verify their email before signing in.
-- Passwords must contain 12 to 128 characters.
-- Better Auth's default scrypt password hashing is used.
-- Email verification links expire after 1 hour.
-- Password-reset links expire after 1 hour.
-- A password reset revokes all existing sessions for the user.
-- Google requests only the `openid`, `email`, and `profile` scopes.
-- Google offline access and refresh tokens are not requested.
-- Accounts with the same verified email resolve to one Relay user.
-- Account linking never permits different email addresses.
-- Better Auth OAuth-token encryption is enabled and derives encryption from `BETTER_AUTH_SECRET`; no second encryption secret is introduced.
-- SMTP is the transport abstraction for verification and reset email.
-- Local Docker development uses Mailpit; production supplies an SMTP provider.
+- Passwords must contain 6 to 128 characters.
+- Passwords use scrypt hashing.
+- Email verification, password reset, and Google OAuth are not part of the current product scope.
 
 ## 3. Sessions and Cookies
 
@@ -46,7 +35,7 @@ Relay uses opaque, database-backed sessions rather than JWT bearer authenticatio
 - Socket.IO validates the same session cookie during every handshake and reconnect.
 - Authentication does not replace workspace, conversation, or resource authorization.
 
-Fresh-session enforcement applies to changing a password or email, linking or unlinking a sign-in provider, and revoking all other sessions. A stale session receives `SESSION_NOT_FRESH`; the client reauthenticates with an existing provider and retries the original action. Ordinary workspace and messaging actions require a valid session but not a fresh one.
+Fresh-session enforcement applies to changing a password or email and revoking all other sessions. A stale session receives `SESSION_NOT_FRESH`; the client reauthenticates and retries the original action. Ordinary workspace and messaging actions require a valid session but not a fresh one.
 
 ## 4. Public Routing
 
@@ -68,13 +57,6 @@ http://localhost:4000  -> Express / Socket.IO
 ```
 
 Local cross-origin API requests must use credentials and an exact allowed origin of `http://localhost:3000`.
-
-Google OAuth callback URLs are:
-
-```text
-Development: http://localhost:4000/api/auth/callback/google
-Production:  https://relay.example.com/api/auth/callback/google
-```
 
 ## 5. Environment Contract
 
@@ -136,8 +118,8 @@ Requiredness:
 | `BETTER_AUTH_SECRET` | Required; at least 32 random bytes | Required; secret manager value |
 | `DATABASE_URL` | Required | Required |
 | `REDIS_URL` | Required | Required |
-| `GOOGLE_CLIENT_ID` | Required for the supported Google flow | Required |
-| `GOOGLE_CLIENT_SECRET` | Required for the supported Google flow | Required |
+| `GOOGLE_CLIENT_ID` | Optional; reserved for future use | Optional; reserved for future use |
+| `GOOGLE_CLIENT_SECRET` | Optional; reserved for future use | Optional; reserved for future use |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Required; Mailpit values allowed | Required |
 | `SMTP_USER`, `SMTP_PASSWORD` | Optional for local Mailpit | Required when the production SMTP provider authenticates |
 | `EMAIL_FROM` | Required | Required and verified by the provider |
@@ -280,7 +262,6 @@ Typing stops immediately after send, blur, conversation change, or disconnect.
 | General authenticated API | 300 requests per minute per user |
 | Sign-in attempts | 5 per 15 minutes per IP and normalized email |
 | Sign-up attempts | 5 per hour per IP |
-| Password reset requests | 3 per hour per IP and normalized email |
 | Invitations sent | 20 per hour per workspace and actor |
 | Invitation acceptance | 10 per 15 minutes per IP |
 | Message sending | 30 per 10 seconds and 300 per 5 minutes per user |

@@ -30,7 +30,7 @@ Better Auth owns the compatible core user record. Relay domain records reference
 - createdAt
 - updatedAt
 
-Better Auth uses this table for email/password credentials and Google accounts. OAuth tokens must be encrypted at rest when stored.
+Relay uses this table for email/password credentials. OAuth provider data is reserved for possible future work.
 
 Unique constraint: `(providerId, accountId)`. The `password` field contains a password hash, never plaintext.
 
@@ -54,7 +54,7 @@ Session tokens are unique. Sessions are opaque and database-backed.
 - createdAt
 - updatedAt
 
-This table supports email verification, password reset, and database-backed OAuth state.
+This table is reserved for future one-time verification workflows.
 
 ### Workspace
 - id

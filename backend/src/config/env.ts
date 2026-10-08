@@ -76,13 +76,6 @@ const environmentSchema = baseEnvironmentSchema.superRefine((environment, contex
         message: "must match WEB_ORIGIN in production",
       });
     }
-    if (!hasGoogleClientId || !hasGoogleClientSecret) {
-      context.addIssue({
-        code: "custom",
-        path: ["GOOGLE_CLIENT_ID"],
-        message: "Google OAuth credentials are required in production",
-      });
-    }
     if (!environment.UPLOAD_DIR) {
       context.addIssue({
         code: "custom",
