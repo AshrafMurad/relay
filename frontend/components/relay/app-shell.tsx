@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { AppHeader } from "@/components/relay/app-shell/app-header"
 import { ChannelDetails } from "@/components/relay/app-shell/channel-details"
-import { AccountImagesDialog, ChannelFormSheet, UtilityDialog, type ChannelFormMode } from "@/components/relay/app-shell/dialogs"
+import { AccountImagesDialog, ChannelFormDialog, UtilityDialog, type ChannelFormMode } from "@/components/relay/app-shell/dialogs"
 import { WorkspaceNavigation, WorkspaceRail } from "@/components/relay/app-shell/navigation"
 import { BrandLogo } from "@/components/relay/brand-logo"
 import { ChannelMessages } from "@/components/relay/channel-messages"
@@ -448,7 +448,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           onUploadWorkspaceImage={() => void uploadWorkspaceImage()}
         />
 
-        <ChannelFormSheet
+        <ChannelFormDialog
           channelNameError={channelNameError}
           formError={formError}
           formMode={formMode}

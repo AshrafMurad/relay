@@ -6,7 +6,6 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { AuthUserDTO, ChannelDTO, WorkspaceDTO } from "@/lib/api/contracts"
@@ -118,7 +117,7 @@ export function AccountImagesDialog({ imageError, imageSubmitting, imageUploadPr
   )
 }
 
-type ChannelFormSheetProps = {
+type ChannelFormDialogProps = {
   channelNameError: string
   formError: string
   formMode: ChannelFormMode
@@ -130,21 +129,21 @@ type ChannelFormSheetProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
 }
 
-export function ChannelFormSheet({ channelNameError, formError, formMode, open, selectedChannel, submitting, onClearChannelNameError, onOpenChange, onSubmit }: ChannelFormSheetProps) {
+export function ChannelFormDialog({ channelNameError, formError, formMode, open, selectedChannel, submitting, onClearChannelNameError, onOpenChange, onSubmit }: ChannelFormDialogProps) {
   return (
-    <Sheet onOpenChange={onOpenChange} open={open}>
-      <SheetContent className="w-[min(92vw,420px)] border-signal-line bg-signal-paper" side="right">
-        <SheetHeader>
-          <SheetTitle>{formMode === "create" ? "Create channel" : "Edit channel"}</SheetTitle>
-          <SheetDescription>{formMode === "create" ? "Add a public channel for every active workspace member." : `Update #${selectedChannel?.name}.`}</SheetDescription>
-        </SheetHeader>
-        <form className="grid gap-5 px-4" key={`${formMode}-${selectedChannel?.id ?? "new"}`} noValidate onSubmit={onSubmit}>
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-signal-line bg-signal-paper text-signal-ink sm:max-w-md">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle>{formMode === "create" ? "Create channel" : "Edit channel"}</DialogTitle>
+          <DialogDescription>{formMode === "create" ? "Add a public channel for every active workspace member." : `Update #${selectedChannel?.name}.`}</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-5" key={`${formMode}-${selectedChannel?.id ?? "new"}`} noValidate onSubmit={onSubmit}>
            <label className="grid gap-1.5 text-sm font-medium">Name<Input aria-describedby={channelNameError ? "channel-name-error" : "channel-name-hint"} aria-invalid={Boolean(channelNameError)} autoFocus defaultValue={formMode === "edit" ? selectedChannel?.name : ""} name="name" onChange={onClearChannelNameError} readOnly={formMode === "edit" && selectedChannel?.name === "general"} />{channelNameError ? <span className="text-helper font-semibold text-destructive" id="channel-name-error">{channelNameError}</span> : <span className="text-helper font-normal text-muted-foreground" id="channel-name-hint">Lowercase letters, numbers, hyphens, and underscores only.</span>}</label>
            <label className="grid gap-1.5 text-sm font-medium">Description <span className="text-muted-foreground">(optional)</span><Textarea className="min-h-28" defaultValue={formMode === "edit" ? selectedChannel?.description ?? "" : ""} name="description" /></label>
           {formError && <p className="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">{formError}</p>}
           <div className="flex justify-end gap-2"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button><Button disabled={submitting} type="submit">{submitting && <Spinner />}{submitting ? "Saving" : formMode === "create" ? "Create channel" : "Save changes"}</Button></div>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
