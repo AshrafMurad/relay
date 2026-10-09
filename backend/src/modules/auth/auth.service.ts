@@ -1,16 +1,20 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
 
 import type { PrismaClient, Session, User } from "@prisma/client";
 
 import { ApiError } from "../../lib/api-error.js";
 
-const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE_NAME = "relay_session";
 const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const PASSWORD_MIN_LENGTH = 6;
 export const PASSWORD_MAX_LENGTH = 128;
+
+// Explicit cost profile. The encoding format stays unchanged because these are
+// also Node's scrypt defaults; pinning them prevents silent drift and makes the
+// hash scheme auditable.
+const SCRYPT_KEY_LENGTH = 64;
+const SCRYPT_OPTIONS = { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 } as const;
 
 export { SESSION_COOKIE_NAME };
 
@@ -50,20 +54,33 @@ function createToken(byteLength = 32) {
   return randomBytes(byteLength).toString("base64url");
 }
 
+function deriveScrypt(password: string, salt: string) {
+  return new Promise<Buffer>((resolve, reject) => {
+    scryptCallback(password, salt, SCRYPT_KEY_LENGTH, SCRYPT_OPTIONS, (error, derived) => {
+      if (error) reject(error);
+      else resolve(derived);
+    });
+  });
+}
+
 async function hashPassword(password: string) {
   const salt = createToken(16);
-  const derived = (await scrypt(password, salt, 64)) as Buffer;
-  return `scrypt:${salt}:${derived.toString("base64url")}`;
+  return `scrypt:${salt}:${(await deriveScrypt(password, salt)).toString("base64url")}`;
 }
 
 async function verifyPassword(password: string, encoded: string | null) {
   if (!encoded) return false;
   const [scheme, salt, expected] = encoded.split(":");
   if (scheme !== "scrypt" || !salt || !expected) return false;
-  const actual = (await scrypt(password, salt, 64)) as Buffer;
+  const actual = await deriveScrypt(password, salt);
   const expectedBuffer = Buffer.from(expected, "base64url");
   return actual.length === expectedBuffer.length && timingSafeEqual(actual, expectedBuffer);
 }
+
+// A throwaway derivation so unknown accounts pay the same password-verification
+// cost as known ones, without exposing which branch executed. The catch keeps a
+// failed startup derivation from surfacing as an unhandled rejection.
+const dummyVerificationTarget = hashPassword(createToken()).catch(() => "scrypt::");
 
 async function createSession(
   prisma: PrismaClient,
@@ -125,7 +142,11 @@ export async function signIn(
     where: { providerId_accountId: { providerId: "credential", accountId: email } },
     include: { user: true },
   });
-  if (!account || !(await verifyPassword(input.password, account.password))) {
+  if (!account) {
+    await dummyVerificationTarget.then((encoded) => verifyPassword(input.password, encoded));
+    throw new ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
+  }
+  if (!(await verifyPassword(input.password, account.password))) {
     throw new ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
   }
   const { token } = await createSession(prisma, account.userId, requestMeta);

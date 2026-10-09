@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -61,14 +61,24 @@ function upload(buffer: Buffer, filename: string, contentType: string) {
   return request(app).post("/api/attachments").set("Cookie", `relay_session=${sessionToken}`).field("workspaceId", workspaceId).attach("file", buffer, { filename, contentType });
 }
 
+async function tempFiles() {
+  try {
+    return await readdir(path.join(uploadDir, "tmp"));
+  } catch {
+    return [];
+  }
+}
+
 describe("attachment uploads", () => {
   it("validates content and cleans up expired pending files", async () => {
     await upload(Buffer.from("not a png"), "spoofed.png", "image/png").expect(400)
       .expect(({ body }) => expect(body).toMatchObject({ error: { code: "ATTACHMENT_TYPE_NOT_ALLOWED" } }));
+    await expect(tempFiles()).resolves.toEqual([]);
 
     const created = await upload(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "valid.png", "image/png").expect(201);
     const attachment = await database.prisma.attachment.findUniqueOrThrow({ where: { id: created.body.attachment.id } });
     await expect(access(path.join(uploadDir, attachment.storageKey))).resolves.toBeUndefined();
+    await expect(tempFiles()).resolves.toEqual([]);
     await database.prisma.attachment.update({ where: { id: attachment.id }, data: { expiresAt: new Date(Date.now() - 1_000) } });
 
     await expect(cleanupExpiredPendingAttachments(database.prisma, uploadDir)).resolves.toBe(1);
@@ -91,6 +101,7 @@ describe("attachment uploads", () => {
     try {
       await upload(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "over-quota.png", "image/png").expect(400)
         .expect(({ body }) => expect(body).toMatchObject({ error: { code: "WORKSPACE_STORAGE_QUOTA_EXCEEDED" } }));
+      await expect(tempFiles()).resolves.toEqual([]);
     } finally {
       await database.prisma.attachment.deleteMany({ where: { id: reservation.id } });
     }
@@ -105,7 +116,8 @@ describe("attachment uploads", () => {
     await request(app).post(`/api/channels/${channel.id}/messages`).set("Cookie", `relay_session=${sessionToken}`).send({ operationId: randomUUID(), content: "", attachmentIds: [attachmentId] }).expect(201);
     await request(app).get(`/api/attachments/${attachmentId}/download`).set("Cookie", `relay_session=${sessionTokens[1]}`).expect(200)
       .expect("content-type", /text\/plain/)
-      .expect("content-disposition", /authorization\.txt/);
+      .expect("content-disposition", /authorization\.txt/)
+      .expect("cache-control", "no-store");
     await request(app).get(`/api/attachments/${attachmentId}/download`).set("Cookie", `relay_session=${sessionTokens[2]}`).expect(404);
 
     await request(app).post(`/api/channels/${channel.id}/messages`).set("Cookie", `relay_session=${sessionToken}`).send({ operationId: randomUUID(), content: "reuse", attachmentIds: [attachmentId] }).expect(400)

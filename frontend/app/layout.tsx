@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { Archivo, Geist_Mono } from "next/font/google"
+import { headers } from "next/headers"
 import Script from "next/script"
 
 import "./globals.css"
@@ -7,7 +8,7 @@ import { IntlProvider } from "@/components/relay/intl-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { DEFAULT_LOCALE } from "@/lib/i18n/locale"
 import { getMessages } from "@/lib/i18n/messages"
-import { THEME_INIT_SCRIPT } from "@/lib/theme"
+
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -26,7 +27,10 @@ export const metadata: Metadata = {
   description: messages.metadata.description,
 }
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Reading the request-scoped nonce opts every page into dynamic rendering,
+  // which the strict CSP nonce scheme requires.
+  const nonce = (await headers()).get("x-nonce") ?? undefined
   return (
     <html
       lang={DEFAULT_LOCALE}
@@ -36,7 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <IntlProvider>{children}</IntlProvider>
         <Toaster position="bottom-right" richColors={false} closeButton />
-        <Script id="relay-theme" strategy="beforeInteractive">{THEME_INIT_SCRIPT}</Script>
+        <Script id="relay-theme" src="/theme-init.js" strategy="beforeInteractive" nonce={nonce} />
       </body>
     </html>
   )

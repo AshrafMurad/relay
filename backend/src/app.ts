@@ -14,6 +14,7 @@ import { createRateLimiter, type RateLimiter, type RateLimitStore } from "./lib/
 import type { RealtimeEventBus } from "./realtime/realtime-events.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import { createOriginGuard } from "./middleware/origin-guard.js";
 import { createUserRateLimit } from "./middleware/rate-limit.js";
 import { createRequestBodyTimeout } from "./middleware/request-timeout.js";
 import { createAttachmentRouter } from "./modules/attachments/attachment.routes.js";
@@ -79,6 +80,7 @@ export function createApp(
   app.use(createRequestBodyTimeout());
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  app.use(createOriginGuard(environment.WEB_ORIGIN));
 
   if (dependencies.database.prisma) {
     app.use(createAuthMiddleware(dependencies.database.prisma, environment.NODE_ENV === "production"));

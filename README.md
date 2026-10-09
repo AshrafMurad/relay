@@ -73,7 +73,7 @@ Seed a demo workspace for screenshots, interviews, and smoke testing:
 npm --prefix backend run seed
 ```
 
-The seed creates the Northstar Labs workspace with channels, DMs, replies, reactions, read state, and a small text attachment. All demo users use `RelayDemoPass123!` as the password.
+The seed creates the Northstar Labs workspace with channels, DMs, replies, reactions, read state, and a small text attachment. All demo users share the password from `DEMO_PASSWORD` (default `RelayDemoPass123!`); the seed never prints the value.
 
 ## Development
 

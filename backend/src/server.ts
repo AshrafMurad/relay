@@ -9,7 +9,7 @@ import { createRateLimiter } from "./lib/rate-limiter.js";
 import { UPLOAD_REQUEST_TIMEOUT_MS } from "./middleware/request-timeout.js";
 import { createSocketServer } from "./realtime/socket-server.js";
 import { RealtimeEventBus } from "./realtime/realtime-events.js";
-import { cleanupExpiredPendingAttachments } from "./modules/attachments/attachment.service.js";
+import { cleanupExpiredPendingAttachments, sweepStaleTempUploads } from "./modules/attachments/attachment.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 
@@ -56,9 +56,12 @@ export async function startServer(source: NodeJS.ProcessEnv = process.env) {
   }
 
   logger.info({ port: environment.PORT }, "Relay API listening");
-  const cleanupAttachments = () => cleanupExpiredPendingAttachments(database.prisma, environment.UPLOAD_DIR)
-    .then((removed) => { if (removed > 0) logger.info({ removed }, "Expired pending attachments removed"); })
-    .catch((error) => logger.error({ err: error }, "Pending attachment cleanup failed"));
+  const cleanupAttachments = () => Promise.all([
+    cleanupExpiredPendingAttachments(database.prisma, environment.UPLOAD_DIR),
+    sweepStaleTempUploads(environment.UPLOAD_DIR),
+  ])
+    .then(([expired, staleTemp]) => { if (expired > 0 || staleTemp > 0) logger.info({ expired, staleTemp }, "Attachment cleanup removed files"); })
+    .catch((error) => logger.error({ err: error }, "Attachment cleanup failed"));
   void cleanupAttachments();
   const attachmentCleanupTimer = setInterval(() => void cleanupAttachments(), 60 * 60_000);
   attachmentCleanupTimer.unref();

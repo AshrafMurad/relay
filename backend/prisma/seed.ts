@@ -7,7 +7,7 @@ import { PrismaClient, type WorkspaceRole } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const scrypt = promisify(scryptCallback);
-const demoPassword = "RelayDemoPass123!";
+const demoPassword = process.env.DEMO_PASSWORD ?? "RelayDemoPass123!";
 const workspaceId = "58d22ca3-1f35-4702-8642-9222f5f34bc0";
 
 const users: Array<{ id: string; email: string; name: string; role: WorkspaceRole; image: string }> = [
@@ -201,7 +201,7 @@ async function main() {
     data: users.slice(0, 6).map((user) => ({ channelId: channelIds.get("general")!, userId: user.id, lastReadMessageId: generalRead })),
   });
 
-  console.log(`Seeded Northstar Labs demo workspace. Demo password for all users: ${demoPassword}`);
+  console.log("Seeded Northstar Labs demo workspace. Demo users share the DEMO_PASSWORD value (default documented in README).");
 }
 
 main()
