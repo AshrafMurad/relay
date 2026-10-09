@@ -6,13 +6,17 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: "npm run dev",
-        url: "http://localhost:3000/healthz",
-        reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        command: "npm run build && node scripts/start-e2e.mjs",
+        url: "http://127.0.0.1:3100/healthz",
+        reuseExistingServer: false,
+        timeout: 180_000,
+        env: {
+          NEXT_PUBLIC_API_URL: "https://relay.example.com/api",
+          NEXT_PUBLIC_SOCKET_URL: "https://relay.example.com",
+        },
       },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100",
     trace: "retain-on-failure",
   },
   projects: [

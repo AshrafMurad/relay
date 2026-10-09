@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 
 import type { DependencyProbe } from "./database.js";
 import type { Logger } from "./logger.js";
+import type { RateLimitStore } from "./rate-limiter.js";
 
-export interface RedisConnection extends DependencyProbe {
+export interface RedisConnection extends DependencyProbe, RateLimitStore {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   markPresenceOnline(userId: string, socketId: string): Promise<void>;
@@ -26,12 +27,28 @@ export interface PresencePublication {
 const PRESENCE_CHANNEL = "presence:updates";
 const WORKSPACE_REVOCATION_CHANNEL = "workspace:revocations";
 const PRESENCE_LEASE_MS = 75_000;
+const RATE_LIMIT_SCRIPT = `
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local window = tonumber(ARGV[2])
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now - window)
+if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[1]) then
+  local oldest = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+  return {0, math.max(1, tonumber(oldest[2]) + window - now)}
+end
+redis.call('ZADD', KEYS[1], now, ARGV[3])
+redis.call('PEXPIRE', KEYS[1], window)
+return {1, 0}
+`;
 
 export function createRedisConnection(url: string, logger: Logger): RedisConnection {
   let connectionAttempt: Promise<void> | undefined;
   const client = createClient({
     url,
+    disableOfflineQueue: true,
+    commandOptions: { timeout: 1_000 },
     socket: {
+      connectTimeout: 2_000,
       reconnectStrategy(retries) {
         return Math.min(1_000 * 2 ** retries, 30_000);
       },
@@ -41,6 +58,8 @@ export function createRedisConnection(url: string, logger: Logger): RedisConnect
   const instanceId = randomUUID();
   let presenceListener: ((event: PresencePublication) => void) | undefined;
   let workspaceRevocationListener: ((workspaceId: string, userId: string) => void) | undefined;
+  let rateLimitsHealthy = true;
+  let subscriptionsReady = false;
 
   client.on("error", (error) => {
     logger.warn({ err: error }, "Redis connection error");
@@ -51,23 +70,11 @@ export function createRedisConnection(url: string, logger: Logger): RedisConnect
 
   return {
     async connect() {
-      if (client.isOpen) return;
-
-      connectionAttempt ??= client
-        .connect()
-        .then(() => undefined)
-        .finally(() => {
-          connectionAttempt = undefined;
-        });
-
-      let timeout: NodeJS.Timeout | undefined;
-      try {
-        await Promise.race([
-          connectionAttempt,
-          new Promise<never>((_resolve, reject) => {
-            timeout = setTimeout(() => reject(new Error("Redis connection timed out")), 2_000);
-          }),
-        ]);
+      if (client.isReady && subscriber.isReady && subscriptionsReady) return;
+      // Complete setup in the background even if startup times out. Otherwise a
+      // delayed Redis recovery would connect the client without subscriptions.
+      connectionAttempt ??= (async () => {
+        if (!client.isOpen) await client.connect();
         if (!subscriber.isOpen) await subscriber.connect();
         await subscriber.subscribe(PRESENCE_CHANNEL, (message) => {
           try {
@@ -87,12 +94,23 @@ export function createRedisConnection(url: string, logger: Logger): RedisConnect
             logger.warn({ err: error }, "Rejected malformed Redis workspace revocation");
           }
         });
+        subscriptionsReady = true;
+      })().finally(() => { connectionAttempt = undefined; });
+
+      let timeout: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          connectionAttempt,
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(() => reject(new Error("Redis connection timed out")), 2_000);
+          }),
+        ]);
       } finally {
         if (timeout) clearTimeout(timeout);
       }
     },
     async probe() {
-      if (!client.isReady) {
+      if (!client.isReady || !subscriber.isReady || !subscriptionsReady || !rateLimitsHealthy) {
         return false;
       }
 
@@ -103,6 +121,7 @@ export function createRedisConnection(url: string, logger: Logger): RedisConnect
       }
     },
     async disconnect() {
+      subscriptionsReady = false;
       if (subscriber.isOpen) {
         await subscriber.close();
       } else {
@@ -112,6 +131,22 @@ export function createRedisConnection(url: string, logger: Logger): RedisConnect
         await client.close();
       } else {
         client.destroy();
+      }
+    },
+    async consumeRateLimit(key, limit, windowMs) {
+      try {
+        if (!client.isReady) throw new Error("Redis rate limits unavailable");
+        const result = await client.eval(RATE_LIMIT_SCRIPT, {
+          keys: [key],
+          arguments: [String(limit), String(windowMs), randomUUID()],
+        });
+        if (!Array.isArray(result) || result.length !== 2) throw new Error("Invalid Redis rate limit response");
+        rateLimitsHealthy = true;
+        return { allowed: Number(result[0]) === 1, retryAfterMs: Number(result[1]) };
+      } catch (error) {
+        if (rateLimitsHealthy) logger.warn("Redis rate limits unavailable; using single-instance fallback");
+        rateLimitsHealthy = false;
+        throw error;
       }
     },
     async markPresenceOnline(userId, socketId) {

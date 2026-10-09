@@ -10,6 +10,8 @@ import type { Environment } from "../../src/config/env.js";
 import type { ClientToServerEvents, MessageAckEvent, ServerToClientEvents } from "../../src/contracts/socket.js";
 import { createDatabase } from "../../src/lib/database.js";
 import { createLogger } from "../../src/lib/logger.js";
+import { createRateLimiter } from "../../src/lib/rate-limiter.js";
+import { createRedisConnection, type RedisConnection } from "../../src/lib/redis.js";
 import { createSocketServer } from "../../src/realtime/socket-server.js";
 import { RealtimeEventBus } from "../../src/realtime/realtime-events.js";
 import { createChannel } from "../../src/modules/channels/channel.service.js";
@@ -46,13 +48,14 @@ function cookie(index: number) {
   return `relay_session=${tokens[index]}`;
 }
 
-async function listen(withHttpApi = false) {
+async function listen(withHttpApi = false, redis?: RedisConnection) {
   const logger = createLogger({ LOG_LEVEL: "fatal" });
   const realtime = new RealtimeEventBus();
+  const rateLimiter = createRateLimiter(redis);
   const httpServer = withHttpApi
-    ? createServer(createApp(applicationEnvironment, { database, redis: { probe: async () => false }, realtime }, logger))
+    ? createServer(createApp(applicationEnvironment, { database, redis: redis ?? { probe: async () => false }, realtime, rateLimiter }, logger))
     : createServer();
-  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime);
+  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime, redis, rateLimiter);
   await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
   const address = httpServer.address();
   if (!address || typeof address === "string") throw new Error("Expected an assigned TCP port");
@@ -243,16 +246,19 @@ describe("real-time channel messaging", () => {
       firstTab.close();
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(presenceUpdates).not.toContainEqual({ userId: userIds[0], status: "offline" });
+      const disconnectedAt = Date.now();
       secondTab.close();
-      await new Promise((resolve) => setTimeout(resolve, 15_100));
-      expect(presenceUpdates).toContainEqual({ userId: userIds[0], status: "offline" });
+      // The grace timer is followed by a database lookup and event delivery.
+      // Await the observable outcome instead of racing that work at 15.1 seconds.
+      await expect.poll(() => presenceUpdates, { timeout: 18_000 }).toContainEqual({ userId: userIds[0], status: "offline" });
+      expect(Date.now() - disconnectedAt).toBeGreaterThanOrEqual(15_000);
     } finally {
       firstTab.close();
       secondTab.close();
       receiver.close();
       await close(httpServer, io);
     }
-  }, 20_000);
+  }, 25_000);
 
   it("publishes HTTP message mutations to connected authorized clients", async () => {
     const { httpServer, io, url } = await listen(true);
@@ -288,6 +294,32 @@ describe("real-time channel messaging", () => {
       sender.close();
       receiver.close();
       await close(httpServer, io);
+    }
+  });
+
+  it("shares the send allowance across HTTP and socket transports", async () => {
+    const redis = createRedisConnection(process.env.REDIS_URL ?? "redis://localhost:6379", createLogger({ LOG_LEVEL: "fatal" }));
+    await redis.connect();
+    const { httpServer, io, url } = await listen(true, redis);
+    const sender = await connect(url, 0);
+    try {
+      await join(sender);
+      // Invalid commands still consume the abuse budget, without adding fixtures.
+      for (let attempt = 0; attempt < 29; attempt += 1) {
+        await request(httpServer).post(`/api/channels/${channelId}/messages`).set("Cookie", cookie(0)).send({}).expect(400);
+      }
+      const operationId = randomUUID();
+      const ack = new Promise<MessageAckEvent>((resolve) => sender.once("message:ack", resolve));
+      sender.emit("message:send", { operationId, workspaceId, conversation: { type: "channel", id: channelId }, content: "final shared allowance" });
+      await expect(ack).resolves.toMatchObject({ operationId });
+      await request(httpServer).post(`/api/channels/${channelId}/messages`).set("Cookie", cookie(0)).send({}).expect(429);
+      const denied = new Promise<unknown>((resolve) => sender.once("message:error", resolve));
+      sender.emit("message:send", { operationId: randomUUID(), workspaceId, conversation: { type: "channel", id: channelId }, content: "over the shared allowance" });
+      await expect(denied).resolves.toMatchObject({ code: "MESSAGE_SEND_RATE_LIMITED" });
+    } finally {
+      sender.close();
+      await close(httpServer, io);
+      await redis.disconnect();
     }
   });
 

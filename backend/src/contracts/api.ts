@@ -2,6 +2,7 @@ export type ApiErrorCode =
   | "INTERNAL_ERROR"
   | "NOT_FOUND"
   | "SERVICE_UNAVAILABLE"
+  | "REQUEST_TIMEOUT"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "VALIDATION_ERROR"

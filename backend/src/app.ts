@@ -10,10 +10,12 @@ import type { IncomingMessage } from "node:http";
 import type { Environment } from "./config/env.js";
 import type { DependencyProbe } from "./lib/database.js";
 import type { Logger } from "./lib/logger.js";
+import { createRateLimiter, type RateLimiter, type RateLimitStore } from "./lib/rate-limiter.js";
 import type { RealtimeEventBus } from "./realtime/realtime-events.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { createUserRateLimit } from "./middleware/rate-limit.js";
+import { createRequestBodyTimeout } from "./middleware/request-timeout.js";
 import { createAttachmentRouter } from "./modules/attachments/attachment.routes.js";
 import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
@@ -27,8 +29,9 @@ import type { PrismaClient } from "@prisma/client";
 
 export interface ApplicationDependencies {
   database: DependencyProbe & { prisma?: PrismaClient };
-  redis: DependencyProbe;
+  redis: DependencyProbe & Partial<RateLimitStore>;
   realtime?: RealtimeEventBus;
+  rateLimiter?: RateLimiter;
 }
 
 export function createApp(
@@ -37,6 +40,13 @@ export function createApp(
   logger: Logger,
 ) {
   const app = express();
+  const rateLimiter = dependencies.rateLimiter ?? createRateLimiter(
+    dependencies.redis.consumeRateLimit ? dependencies.redis as DependencyProbe & RateLimitStore : undefined,
+  );
+  app.use((request, _response, next) => {
+    request.rateLimiter = rateLimiter;
+    next();
+  });
 
   app.disable("x-powered-by");
   app.set("trust proxy", environment.TRUST_PROXY);
@@ -66,6 +76,7 @@ export function createApp(
     }),
   );
   app.use(compression());
+  app.use(createRequestBodyTimeout());
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 

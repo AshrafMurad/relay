@@ -17,7 +17,10 @@ export const notFoundHandler: RequestHandler = (request, response) => {
 
 export function createErrorHandler(logger: Logger): ErrorRequestHandler {
   return (error: unknown, request, response, next) => {
-    void next;
+    if (response.headersSent) {
+      next(error);
+      return;
+    }
 
     if (error instanceof ApiError) {
       const body: ApiErrorResponse = {

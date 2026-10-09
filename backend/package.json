@@ -24,6 +24,11 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    }
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -63,6 +68,6 @@
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.71.0",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   }
 }

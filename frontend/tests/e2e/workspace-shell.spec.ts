@@ -36,10 +36,11 @@ async function mockWorkspaceApi(page: Page) {
     else if (path === `/workspaces/${workspace.id}/channels`) body = { channels }
     else if (path === `/workspaces/${workspace.id}/members`) body = { members }
     else if (path === `/workspaces/${workspace.id}/direct-conversations`) body = { conversations }
+    else if (path === `/workspaces/${workspace.id}/sync`) body = { events: [], nextCursor: "checkpoint", hasMore: false, resetRequired: false }
     else if (path === "/channels/channel-1/messages") body = { messages, nextCursor: null, hasMore: false }
     else if (path === "/channels/channel-1/read") body = { readState: { workspaceId: workspace.id, conversation: { type: "channel", id: "channel-1" }, userId: user.id, lastReadMessageId: "message-1", lastReadAt: now } }
     else body = { error: { code: "NOT_FOUND" } }
-    await route.fulfill({ contentType: "application/json", status: path.startsWith("/unknown") ? 404 : 200, body: JSON.stringify(body) })
+    await route.fulfill({ contentType: "application/json", status: body && typeof body === "object" && "error" in body ? 404 : 200, body: JSON.stringify(body) })
   })
 }
 
@@ -56,16 +57,24 @@ test("keeps workspace routing and shell actions legible in both themes", async (
     await expect(page.getByText("Mina Chen").last()).toBeVisible()
   }
   await expect(page.getByRole("navigation", { name: "Channels" }).getByRole("link", { name: "launch-room" })).toHaveAttribute("aria-current", "page")
-  await expect(page.getByRole("link", { name: "Search messages" }).last()).toBeVisible()
-  await expect(page.getByText("The reconnect check passed.")).toBeVisible()
 
+  await page.getByRole("button", { name: /Mina Chen.*mina@northstar.test/ }).last().click()
   await page.getByRole("button", { name: "Use light theme" }).last().click()
   await expect(page.locator("html")).not.toHaveClass(/dark/)
   await expect(page.getByRole("button", { name: "Use dark theme" }).last()).toBeVisible()
 
+  await page.keyboard.press("Escape")
+  if (testInfo.project.name === "mobile-chrome") await page.keyboard.press("Escape")
+  await expect(page.getByRole("link", { name: "Search messages" })).toBeVisible()
+  await expect(page.getByText("The reconnect check passed. Release notes are ready for review.")).toBeVisible()
+
   if (process.env.CAPTURE_SHELL) {
     await page.screenshot({ fullPage: true, path: testInfo.outputPath("workspace-shell-light.png") })
+    if (testInfo.project.name === "mobile-chrome") await page.getByRole("button", { name: "Open navigation" }).click()
+    await page.getByRole("button", { name: /Mina Chen.*mina@northstar.test/ }).last().click()
     await page.getByRole("button", { name: "Use dark theme" }).last().click()
+    await page.keyboard.press("Escape")
+    if (testInfo.project.name === "mobile-chrome") await page.keyboard.press("Escape")
     await page.screenshot({ fullPage: true, path: testInfo.outputPath("workspace-shell-dark.png") })
   }
 })
@@ -77,7 +86,7 @@ test("keeps shell chrome visible in a short desktop viewport", async ({ page }, 
 
   const header = page.getByRole("heading", { name: "launch-room" })
   const composer = page.getByPlaceholder("Message #launch-room")
-  const profileAction = page.getByRole("button", { name: "Use light theme" })
+  const profileAction = page.getByRole("button", { name: /Mina Chen.*mina@northstar.test/ })
   const sendAction = page.getByRole("button", { name: "Send message" })
 
   await expect(header).toBeVisible()

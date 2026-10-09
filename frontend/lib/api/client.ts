@@ -3,6 +3,7 @@ import { parsePublicEnvironment } from "@/env"
 import type { ApiErrorResponse } from "./contracts"
 
 const HTTP_REQUEST_TIMEOUT_MS = 15_000
+const UPLOAD_REQUEST_TIMEOUT_MS = 60_000
 
 const environment = parsePublicEnvironment({
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
@@ -31,7 +32,7 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
   const timeout = setTimeout(() => {
     timedOut = true
     controller.abort()
-  }, HTTP_REQUEST_TIMEOUT_MS)
+  }, init.body instanceof FormData ? UPLOAD_REQUEST_TIMEOUT_MS : HTTP_REQUEST_TIMEOUT_MS)
 
   let response: Response
   try {
@@ -43,6 +44,15 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
       credentials: "include",
       headers,
     })
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as ApiErrorResponse | null
+      if (timedOut) throw new ApiClientError("REQUEST_TIMEOUT")
+      throw new ApiClientError(body?.error.code ?? "REQUEST_FAILED")
+    }
+
+    if (response.status === 204) return undefined as TResponse
+    return (await response.json()) as TResponse
   } catch (caught) {
     if (timedOut) {
       throw new ApiClientError("REQUEST_TIMEOUT")
@@ -52,12 +62,4 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
     clearTimeout(timeout)
     init.signal?.removeEventListener("abort", abortFromCaller)
   }
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as ApiErrorResponse | null
-    throw new ApiClientError(body?.error.code ?? "REQUEST_FAILED")
-  }
-
-  if (response.status === 204) return undefined as TResponse
-  return (await response.json()) as TResponse
 }

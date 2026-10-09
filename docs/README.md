@@ -21,6 +21,7 @@ Relay is a real-time communication workspace for small remote teams.
 15. `15-DEPLOYMENT-AND-OPERATIONS.md` — Docker/Coolify production plan.
 16. `RELAY-SPRINT-PHASES.md` — sprint-by-sprint execution plan, including dedicated Impeccable UI refinement.
 17. `16-SPRINT-0-DECISIONS.md` — locked authentication, runtime, limits, pagination, timing, rate-limit, and deployment decisions.
+18. `17-PREPRODUCTION-HARDENING.md` — preproduction implementation notes, validation evidence, and release follow-ups.
 
 ## Locked Architecture
 

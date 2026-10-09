@@ -126,6 +126,12 @@ npm --prefix backend run build
 
 The integration tests require the Docker PostgreSQL and Redis services to be running.
 
+The default Playwright run builds production code and starts a fresh test server on port `3100`. Its public API/socket origin is a synthetic HTTPS origin used by the mocked shell tests. Set `PLAYWRIGHT_BASE_URL` to run against an already deployed test environment instead. The current shell tests use mocked APIs; they do not replace the two-user production smoke test.
+
+On Windows, stop the backend dev server before `prisma:generate` or dependency installation so its loaded Prisma engine DLL can be replaced. Validation uses Node.js 24; check `node --version` before running these commands.
+
+Phase 1 hardening details and remaining dependency follow-ups are recorded in [docs/17-PREPRODUCTION-HARDENING.md](docs/17-PREPRODUCTION-HARDENING.md).
+
 ## Production Deployment
 
 Production uses one public origin with reverse-proxy path routing:

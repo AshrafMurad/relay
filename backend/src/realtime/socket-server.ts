@@ -11,6 +11,7 @@ import type {
 } from "../contracts/socket.js";
 import type { Logger } from "../lib/logger.js";
 import type { RedisConnection } from "../lib/redis.js";
+import { createRateLimiter, type RateLimiter } from "../lib/rate-limiter.js";
 import { ApiError } from "../lib/api-error.js";
 import { getSessionByToken, SESSION_COOKIE_NAME } from "../modules/auth/auth.service.js";
 import { requireAccessibleDirectConversation } from "../modules/direct-conversations/direct-conversation.service.js";
@@ -43,22 +44,6 @@ function fallbackMessageSequence(message: { createdAt: string; id: string }) {
   return `${message.createdAt}:${message.id}`;
 }
 
-function createWindowLimiter(limit: number, windowMs: number) {
-  const hits = new Map<string, number[]>();
-  return (key: string) => {
-    const now = Date.now();
-    const windowStart = now - windowMs;
-    const current = (hits.get(key) ?? []).filter((timestamp) => timestamp > windowStart);
-    if (current.length >= limit) {
-      hits.set(key, current);
-      return false;
-    }
-    current.push(now);
-    hits.set(key, current);
-    return true;
-  };
-}
-
 function socketError(error: unknown, operationId?: string) {
   if (error instanceof ApiError) {
     return { operationId, code: error.code };
@@ -73,12 +58,8 @@ export function createSocketServer(
   prisma?: PrismaClient,
   realtime?: RealtimeEventBus,
   redis?: RedisConnection,
+  rateLimiter: RateLimiter = createRateLimiter(redis),
 ) {
-  const allowJoin = createWindowLimiter(60, 60_000);
-  const allowShortMessageSend = createWindowLimiter(30, 10_000);
-  const allowLongMessageSend = createWindowLimiter(300, 5 * 60_000);
-  const allowTyping = createWindowLimiter(20, 10_000);
-  const allowReaction = createWindowLimiter(60, 60_000);
   const activeSocketsByUser = new Map<string, Set<string>>();
   const presenceGraceTimers = new Map<string, NodeJS.Timeout>();
   const typingTimers = new Map<string, NodeJS.Timeout>();
@@ -266,7 +247,7 @@ export function createSocketServer(
         return;
       }
       try {
-        if (!allowJoin(socket.id)) throw new ApiError(429, "RATE_LIMITED", "Too many conversation join attempts.");
+        if (!(await rateLimiter.consume("conversation-join", socket.id, 60, 60_000)).allowed) throw new ApiError(429, "RATE_LIMITED", "Too many conversation join attempts.");
         const conversation = await authorizeConversation(event);
         await socket.join(conversation.room);
         await socket.join(workspaceRoom(conversation.workspaceId));
@@ -306,7 +287,8 @@ export function createSocketServer(
         return;
       }
       try {
-        if (!allowShortMessageSend(socket.data.userId) || !allowLongMessageSend(socket.data.userId)) {
+        if (!(await rateLimiter.consume("MESSAGE_SEND_RATE_LIMITED", socket.data.userId, 30, 10_000)).allowed ||
+            !(await rateLimiter.consume("MESSAGE_SEND_RATE_LIMITED", socket.data.userId, 300, 5 * 60_000)).allowed) {
           throw new ApiError(429, "MESSAGE_SEND_RATE_LIMITED", "Too many messages sent. Please wait before retrying.");
         }
         const conversation = await authorizeConversation(event);
@@ -341,7 +323,7 @@ export function createSocketServer(
         return;
       }
       try {
-        if (!allowReaction(socket.data.userId)) throw new ApiError(429, "RATE_LIMITED", "Too many reaction changes.");
+        if (!(await rateLimiter.consume("reaction-change", socket.data.userId, 60, 60_000)).allowed) throw new ApiError(429, "RATE_LIMITED", "Too many reaction changes.");
         const parsed = reactionToggleSchema.safeParse({ emoji: event.emoji });
         if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Socket event data is invalid.");
         const result = await toggleMessageReaction(prisma, event.messageId, socket.data.userId, parsed.data);
@@ -390,7 +372,7 @@ export function createSocketServer(
     socket.on("typing:start", async (event) => {
       try {
         const conversation = await authorizeConversation(event);
-        if (!allowTyping(`${socket.data.userId}:${conversation.type}:${conversation.id}`)) return;
+        if (!(await rateLimiter.consume("typing", `${socket.data.userId}:${conversation.type}:${conversation.id}`, 20, 10_000)).allowed) return;
         const key = `${conversation.type}:${conversation.id}:${socket.data.userId}`;
         const existing = typingTimers.get(key);
         if (existing) clearTimeout(existing);
@@ -415,13 +397,15 @@ export function createSocketServer(
       }
     });
 
-    socket.on("disconnect", () => {
-      if (presenceRefreshTimer) clearInterval(presenceRefreshTimer);
-      if (!socket.data.userId) return;
+    socket.on("disconnecting", () => {
       for (const room of socket.rooms) {
         if (room.startsWith("channel:")) stopTyping({ workspaceId: "", conversation: { type: "channel", id: room.slice("channel:".length) } });
         if (room.startsWith("dm:")) stopTyping({ workspaceId: "", conversation: { type: "dm", id: room.slice("dm:".length) } });
       }
+    });
+    socket.on("disconnect", () => {
+      if (presenceRefreshTimer) clearInterval(presenceRefreshTimer);
+      if (!socket.data.userId) return;
       const sockets = activeSocketsByUser.get(socket.data.userId);
       sockets?.delete(socket.id);
       const userId = socket.data.userId;
@@ -440,12 +424,19 @@ export function createSocketServer(
             }
           }
           const memberships = prisma ? await prisma.workspaceMember.findMany({ where: { userId, status: "ACTIVE" }, select: { workspaceId: true } }) : [];
+          if (activeSocketsByUser.has(userId)) return;
           const workspaceIds = memberships.length > 0 ? memberships.map((membership) => membership.workspaceId) : [...(socket.data.workspaceIds ?? [])];
           await Promise.all(workspaceIds.map((workspaceId) => publishPresence(workspaceId, userId, "offline")));
         })().catch((error) => logger.warn({ err: error }, "Presence offline publication failed"));
-      }, 15_000));
+      }, 15_000).unref());
     });
   });
 
+  httpServer.once("close", () => {
+    for (const timer of presenceGraceTimers.values()) clearTimeout(timer);
+    for (const timer of typingTimers.values()) clearTimeout(timer);
+    presenceGraceTimers.clear();
+    typingTimers.clear();
+  });
   return io;
 }

@@ -61,6 +61,8 @@ Reverse proxy must support WebSocket upgrade headers and long-lived connections.
 
 Coolify/Traefik should be configured accordingly.
 
+The proxy must allow at least 70 seconds to receive/forward multipart uploads so it does not cut off the application's 60-second upload deadline. Permit at least 90 seconds of idle time on upgraded WebSocket connections, with no short total-response deadline on those connections. Socket.IO sends pings every 25 seconds with a 20-second ping timeout. Verify these settings through the deployed HTTPS origin using a slow upload and a connection that remains open through several ping cycles; Compose configuration validation alone does not verify the external proxy.
+
 ## 7. PostgreSQL
 
 - use persistent volume/managed DB;

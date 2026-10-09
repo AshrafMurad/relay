@@ -5,6 +5,8 @@ import { parseEnvironment } from "./config/env.js";
 import { createDatabase } from "./lib/database.js";
 import { createLogger } from "./lib/logger.js";
 import { createRedisConnection } from "./lib/redis.js";
+import { createRateLimiter } from "./lib/rate-limiter.js";
+import { UPLOAD_REQUEST_TIMEOUT_MS } from "./middleware/request-timeout.js";
 import { createSocketServer } from "./realtime/socket-server.js";
 import { RealtimeEventBus } from "./realtime/realtime-events.js";
 import { cleanupExpiredPendingAttachments } from "./modules/attachments/attachment.service.js";
@@ -24,11 +26,12 @@ export async function startServer(source: NodeJS.ProcessEnv = process.env) {
     throw error;
   }
   const realtime = new RealtimeEventBus();
-  const app = createApp(environment, { database, redis, realtime }, logger);
+  const rateLimiter = createRateLimiter(redis);
+  const app = createApp(environment, { database, redis, realtime, rateLimiter }, logger);
   const httpServer = createServer(app);
-  httpServer.requestTimeout = 15_000;
+  httpServer.requestTimeout = UPLOAD_REQUEST_TIMEOUT_MS;
   httpServer.headersTimeout = 16_000;
-  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime, redis);
+  const io = createSocketServer(httpServer, environment, logger, database.prisma, realtime, redis, rateLimiter);
 
   try {
     try {
