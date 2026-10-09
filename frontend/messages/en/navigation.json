@@ -1,0 +1,23 @@
+{
+  "publicAria": "Public navigation",
+  "home": "Relay home",
+  "openRelay": "Open Relay",
+  "useAnotherAccount": "Use another account",
+  "login": "Log in",
+  "signup": "Sign up",
+  "roleWorkspace": "{role} workspace",
+  "switchWorkspace": "Switch workspace",
+  "allWorkspaces": "All workspaces",
+  "channels": "Channels",
+  "canManageChannels": "You can manage channels.",
+  "onlyOwnersAdmins": "Only owners and admins can manage channels.",
+  "createChannel": "Create channel",
+  "archived": "Archived",
+  "noChannelsManager": "No channels yet. Create one to start the workspace.",
+  "noChannelsMember": "No channels are available. Ask an Owner or Admin to create one.",
+  "directMessages": "Direct Messages",
+  "workspaces": "Workspaces",
+  "account": "Account",
+  "profileImages": "Profile and workspace images",
+  "signOut": "Sign out"
+}

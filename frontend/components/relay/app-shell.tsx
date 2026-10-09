@@ -24,6 +24,8 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
 import type { AuthUserDTO, ChannelDTO, ConversationReadStateDTO, DirectConversationDTO, MessageDTO, WorkspaceDTO, WorkspaceMemberDTO } from "@/lib/api/contracts"
 import { canManageChannels, channelNameSchema } from "@/lib/channels"
+import { useErrorTranslator } from "@/lib/i18n/errors"
+import { useTranslateT } from "@/lib/i18n/use-translate-t"
 import { cn } from "@/lib/utils"
 
 type LoadState = "loading" | "ready" | "error"
@@ -43,6 +45,8 @@ function LoadingShell() {
 
 export function RelayAppShell({ children }: { children: ReactNode }) {
   const router = useRouter()
+  const t = useTranslateT("appshell")
+  const errors = useErrorTranslator()
   const pathname = usePathname()
   const params = useParams<{ workspaceSlug?: string | string[]; channelId?: string | string[]; conversationId?: string | string[] }>()
   const workspaceSlug = typeof params.workspaceSlug === "string" ? params.workspaceSlug : ""
@@ -95,7 +99,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           apiRequest<{ workspaces: WorkspaceDTO[] }>("/workspaces"),
         ])
         const currentWorkspace = availableWorkspaces.find((item) => item.slug === workspaceSlug)
-        if (!currentWorkspace) throw new ApiClientError("WORKSPACE_NOT_FOUND", "Workspace was not found or is no longer available.")
+        if (!currentWorkspace) throw new ApiClientError("WORKSPACE_NOT_FOUND")
         const [{ channels: availableChannels }, { members: workspaceMembers }, { conversations }] = await Promise.all([
           apiRequest<{ channels: ChannelDTO[] }>(`/workspaces/${currentWorkspace.id}/channels`),
           apiRequest<{ members: WorkspaceMemberDTO[] }>(`/workspaces/${currentWorkspace.id}/members`),
@@ -116,14 +120,14 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
           startTransition(() => router.replace("/login"))
           return
         }
-        setError(caught instanceof Error ? caught.message : "Workspace could not be loaded.")
+        setError(errors.apiError(caught))
         setState("error")
       }
     }
 
     void load()
     return () => { cancelled = true }
-  }, [router, workspaceSlug])
+  }, [errors, router, workspaceSlug])
 
   useEffect(() => {
     return () => { if (profilePreview) URL.revokeObjectURL(profilePreview) }
@@ -156,7 +160,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setNavigationOpen(false)
       startTransition(() => router.push(`/app/${workspace.slug}/dm/${conversation.id}`))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Direct message could not be opened.")
+      setError(errors.apiError(caught))
     }
   }
 
@@ -216,7 +220,7 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
     const description = String(form.get("description") ?? "")
     const parsedName = channelNameSchema.safeParse(name)
     if (!parsedName.success) {
-      setChannelNameError(parsedName.error.issues[0]?.message ?? "Channel name is invalid.")
+      setChannelNameError(errors.field("channelName"))
       return
     }
 
@@ -240,9 +244,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
         startTransition(() => router.push(`/app/${workspace.slug}/channels/${channel.id}`))
       }
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Channel could not be saved."
+      const message = errors.apiError(caught)
       setFormError(message)
-      toast.error("Channel was not saved", { description: message })
+      toast.error(errors.toastTitle("channelNotSaved"), { description: message })
     } finally {
       setSubmitting(false)
     }
@@ -258,9 +262,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
         description: `#${channel.name} is ${action === "archive" ? "hidden from active channel flow" : "available again"}.`,
       })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : `Channel could not be ${action}d.`
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error(action === "archive" ? "Archive failed" : "Restore failed", { description: message })
+      toast.error(action === "archive" ? errors.toastTitle("archiveFailed") : errors.toastTitle("restoreFailed"), { description: message })
     }
   }
 
@@ -285,9 +289,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setImageUploadProgress(100)
       toast.success("Profile image updated", { description: "Your new image is now shown across Relay." })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Profile image could not be uploaded."
+      const message = errors.apiError(caught)
       setImageError(message)
-      toast.error("Profile upload failed", { description: message })
+      toast.error(errors.toastTitle("profileUploadFailed"), { description: message })
     } finally {
       setImageSubmitting(null)
       setImageUploadProgress(0)
@@ -310,9 +314,9 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       setImageUploadProgress(100)
       toast.success("Workspace image updated", { description: `${response.workspace.name} now uses the new workspace image.` })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Workspace image could not be uploaded."
+      const message = errors.apiError(caught)
       setImageError(message)
-      toast.error("Workspace upload failed", { description: message })
+      toast.error(errors.toastTitle("workspaceUploadFailed"), { description: message })
     } finally {
       setImageSubmitting(null)
       setImageUploadProgress(0)
@@ -345,10 +349,10 @@ export function RelayAppShell({ children }: { children: ReactNode }) {
       <main className="grid h-dvh place-items-center bg-signal-paper p-6 text-signal-ink">
         <section className="max-w-md text-center">
           <div className="mx-auto size-12"><BrandLogo mark="icon" priority /></div>
-          <p className="text-metadata mt-5 uppercase tracking-[0.18em] text-signal-amber">Workspace unavailable</p>
-          <h1 className="mt-3 text-xl font-semibold">This workspace could not be opened</h1>
-          <p className="mt-2 text-sm text-signal-muted">{error || "Your membership may have changed."}</p>
-          <Button className="mt-5" nativeButton={false} render={<Link href="/" />}>Return home</Button>
+          <p className="text-metadata mt-5 uppercase tracking-[0.18em] text-signal-amber">{t("workspaceUnavailable")}</p>
+          <h1 className="mt-3 text-xl font-semibold">{t("workspaceUnavailableTitle")}</h1>
+          <p className="mt-2 text-sm text-signal-muted">{error || t("membershipChanged")}</p>
+          <Button className="mt-5" nativeButton={false} render={<Link href="/" />}>{t("returnHome")}</Button>
         </section>
       </main>
     )

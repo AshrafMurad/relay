@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { ApiClientError, apiRequest } from "@/lib/api/client"
 import type { WorkspaceDTO, WorkspaceInvitationDTO, WorkspaceMemberDTO, WorkspaceRole } from "@/lib/api/contracts"
+import { useErrorTranslator } from "@/lib/i18n/errors"
 
 function invitationState(invitation: WorkspaceInvitationDTO) {
   if (invitation.acceptedAt) return "Accepted"
@@ -19,13 +20,14 @@ function invitationState(invitation: WorkspaceInvitationDTO) {
   return "Pending"
 }
 
-function validateEmail(value: string) {
-  if (!value) return "Enter an email address."
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Enter a valid email address."
+function validateEmail(value: string, fieldError: ReturnType<typeof useErrorTranslator>["field"]) {
+  if (!value) return fieldError("emailRequired")
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return fieldError("emailInvalid")
   return ""
 }
 
 export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string }) {
+  const errors = useErrorTranslator()
   const [workspace, setWorkspace] = useState<WorkspaceDTO | null>(null)
   const [members, setMembers] = useState<WorkspaceMemberDTO[]>([])
   const [invitations, setInvitations] = useState<WorkspaceInvitationDTO[]>([])
@@ -44,7 +46,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     let cancelled = false
     apiRequest<{ workspaces: WorkspaceDTO[] }>("/workspaces").then(async ({ workspaces }) => {
       const current = workspaces.find((item) => item.slug === workspaceSlug)
-      if (!current) throw new ApiClientError("WORKSPACE_NOT_FOUND", "Workspace was not found.")
+      if (!current) throw new ApiClientError("WORKSPACE_NOT_FOUND")
       const [memberResult, invitationResult] = await Promise.all([
         apiRequest<{ members: WorkspaceMemberDTO[] }>(`/workspaces/${current.id}/members`),
         current.currentUserRole === "MEMBER"
@@ -56,10 +58,10 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setMembers(memberResult.members)
       setInvitations(invitationResult.invitations)
     }).catch((caught) => {
-      if (!cancelled) setError(caught instanceof Error ? caught.message : "Members could not be loaded.")
+      if (!cancelled) setError(errors.apiError(caught))
     }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [workspaceSlug])
+  }, [errors, workspaceSlug])
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -67,7 +69,7 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
     const form = event.currentTarget
     const data = new FormData(form)
     const email = String(data.get("email") ?? "").trim()
-    const nextEmailError = validateEmail(email)
+    const nextEmailError = validateEmail(email, errors.field)
     if (nextEmailError) {
       setEmailError(nextEmailError)
       return
@@ -88,9 +90,9 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       form.reset()
       toast.success("Invitation created", { description: `Invite link for ${email} is ready to share.` })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Invitation could not be created."
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error("Invite was not created", { description: message })
+      toast.error(errors.toastTitle("inviteNotCreated"), { description: message })
     } finally {
       setSubmitting(false)
     }
@@ -102,9 +104,9 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setCopied(true)
       toast.success("Invite link copied", { description: "The invitation link is on your clipboard." })
     } catch {
-      const message = "Copy was blocked by the browser. Select and copy the invitation link manually."
+      const message = errors.code("REQUEST_FAILED")
       setError(message)
-      toast.error("Copy failed", { description: message })
+      toast.error(errors.toastTitle("copyFailed"), { description: message })
     }
   }
 
@@ -116,9 +118,9 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setInvitations((current) => current.map((item) => item.id === invitationId ? result.invitation : item))
       toast.success("Invitation revoked", { description: "That invite link can no longer be accepted." })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Invitation could not be revoked."
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error("Revoke failed", { description: message })
+      toast.error(errors.toastTitle("revokeFailed"), { description: message })
     }
   }
 
@@ -133,9 +135,9 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setWorkspace(result.workspace)
       toast.success("Workspace updated")
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Workspace settings could not be updated."
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error("Update failed", { description: message })
+      toast.error(errors.toastTitle("updateFailed"), { description: message })
     } finally {
       setSubmitting(false)
     }
@@ -150,9 +152,9 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setMembers((current) => current.map((item) => item.id === member.id ? result.member : item))
       toast.success("Member role updated", { description: `${member.name} is now ${role === "ADMIN" ? "an admin" : "a member"}.` })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "The member role could not be updated."
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error("Role update failed", { description: message })
+      toast.error(errors.toastTitle("roleUpdateFailed"), { description: message })
     } finally {
       setMemberAction("")
     }
@@ -169,9 +171,9 @@ export function WorkspaceMembersPage({ workspaceSlug }: { workspaceSlug: string 
       setMemberToRemove(null)
       toast.success("Member removed", { description: `${member.name} no longer has workspace access.` })
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "The member could not be removed."
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error("Removal failed", { description: message })
+      toast.error(errors.toastTitle("removalFailed"), { description: message })
     } finally {
       setMemberAction("")
     }

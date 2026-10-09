@@ -1,4 +1,6 @@
 import type { AuthUserDTO, MessageDTO } from "./api/contracts"
+import { formatMessage } from "@/lib/i18n/format"
+import { getMessages } from "@/lib/i18n/messages"
 
 export const MESSAGE_CODE_POINT_LIMIT = 4_000
 
@@ -12,20 +14,23 @@ export type ClientMessage = MessageDTO & {
 
 export type MessageContentResult =
   | { success: true; content: string; codePoints: number }
-  | { success: false; content: string; codePoints: number; message: string }
+  | { success: false; content: string; codePoints: number; message: string; errorKey: "messageEmpty" | "messageTooLong"; errorValues?: Record<string, string | number> }
 
 export function validateMessageContent(value: string): MessageContentResult {
+  const validationMessages = getMessages().errors.fields
   const content = value.trim()
   const codePoints = Array.from(content).length
   if (codePoints === 0) {
-    return { success: false, content, codePoints, message: "Write a message before sending." }
+    return { success: false, content, codePoints, message: validationMessages.messageEmpty, errorKey: "messageEmpty" }
   }
   if (codePoints > MESSAGE_CODE_POINT_LIMIT) {
     return {
       success: false,
       content,
       codePoints,
-      message: `Message is ${codePoints - MESSAGE_CODE_POINT_LIMIT} characters too long.`,
+      message: formatMessage(validationMessages.messageTooLong, { extra: codePoints - MESSAGE_CODE_POINT_LIMIT }),
+      errorKey: "messageTooLong",
+      errorValues: { extra: codePoints - MESSAGE_CODE_POINT_LIMIT },
     }
   }
   return { success: true, content, codePoints }

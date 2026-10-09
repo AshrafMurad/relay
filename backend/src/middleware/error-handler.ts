@@ -8,7 +8,6 @@ export const notFoundHandler: RequestHandler = (request, response) => {
   const body: ApiErrorResponse = {
     error: {
       code: "NOT_FOUND",
-      message: "The requested resource was not found.",
       requestId: response.getHeader("x-request-id")?.toString(),
     },
   };
@@ -24,7 +23,6 @@ export function createErrorHandler(logger: Logger): ErrorRequestHandler {
       const body: ApiErrorResponse = {
         error: {
           code: error.code,
-          message: error.message,
           requestId: request.id === undefined ? undefined : String(request.id),
         },
       };
@@ -38,7 +36,6 @@ export function createErrorHandler(logger: Logger): ErrorRequestHandler {
     const body: ApiErrorResponse = {
       error: {
         code: "INTERNAL_ERROR",
-        message: "An unexpected error occurred.",
         requestId: request.id === undefined ? undefined : String(request.id),
       },
     };

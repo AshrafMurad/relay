@@ -3,7 +3,10 @@ import { Archivo, Geist_Mono } from "next/font/google"
 import Script from "next/script"
 
 import "./globals.css"
+import { IntlProvider } from "@/components/relay/intl-provider"
 import { Toaster } from "@/components/ui/sonner"
+import { DEFAULT_LOCALE } from "@/lib/i18n/locale"
+import { getMessages } from "@/lib/i18n/messages"
 import { THEME_INIT_SCRIPT } from "@/lib/theme"
 
 const archivo = Archivo({
@@ -16,20 +19,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
+const messages = getMessages()
+
 export const metadata: Metadata = {
-  title: "Relay · Communication routed clearly",
-  description: "A focused real-time communication workspace for small remote teams.",
+  title: messages.metadata.title,
+  description: messages.metadata.description,
 }
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang={DEFAULT_LOCALE}
       suppressHydrationWarning
       className={`${archivo.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full">
-        {children}
+        <IntlProvider>{children}</IntlProvider>
         <Toaster position="bottom-right" richColors={false} closeButton />
         <Script id="relay-theme" strategy="beforeInteractive">{THEME_INIT_SCRIPT}</Script>
       </body>

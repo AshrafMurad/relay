@@ -15,7 +15,7 @@ export const API_BASE_URL = environment.NEXT_PUBLIC_API_URL
 export class ApiClientError extends Error {
   constructor(
     public readonly code: string,
-    message: string,
+    message = code,
   ) {
     super(message)
   }
@@ -45,7 +45,7 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
     })
   } catch (caught) {
     if (timedOut) {
-      throw new ApiClientError("REQUEST_TIMEOUT", "Request timed out after 15 seconds.")
+      throw new ApiClientError("REQUEST_TIMEOUT")
     }
     throw caught
   } finally {
@@ -55,7 +55,7 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorResponse | null
-    throw new ApiClientError(body?.error.code ?? "REQUEST_FAILED", body?.error.message ?? "Request failed.")
+    throw new ApiClientError(body?.error.code ?? "REQUEST_FAILED")
   }
 
   if (response.status === 204) return undefined as TResponse

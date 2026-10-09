@@ -1,0 +1,31 @@
+{
+  "appName": "Relay",
+  "cancel": "Cancel",
+  "close": "Close",
+  "continue": "Continue",
+  "copy": "Copy",
+  "copied": "Copied",
+  "create": "Create",
+  "delete": "Delete",
+  "download": "Download",
+  "loading": "Loading",
+  "save": "Save",
+  "saving": "Saving",
+  "search": "Search",
+  "searching": "Searching",
+  "upload": "Upload",
+  "uploading": "Uploading",
+  "tryAgain": "Try again",
+  "comingSoon": "Coming soon",
+  "optional": "optional",
+  "noFileSelected": "No file selected",
+  "role": {
+    "admin": "Admin",
+    "member": "Member",
+    "owner": "Owner"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "fallbackLoadError": "Workspace access could not be loaded.",
+  "fallbackCreateError": "Workspace could not be created.",
+  "routing": "Routing your workspace",
+  "checkingMemberships": "Checking your active memberships.",
+  "signOut": "Sign out",
+  "heroTitle": "Choose where your team connects.",
+  "heroBody": "Create a new workspace for your team, or use an invitation to join one that already exists. You can switch workspaces at any time.",
+  "yourWorkspaces": "Your workspaces",
+  "total": "{count} total",
+  "findWorkspace": "Find a workspace",
+  "workspacesAria": "Your workspaces",
+  "noMatches": "No workspaces match \"{query}\".",
+  "createWorkspace": "Create a workspace",
+  "createWorkspaceHint": "You will become the Owner and Relay will prepare a general channel.",
+  "workspaceName": "Workspace name",
+  "workspaceNamePlaceholder": "Acme product team",
+  "creating": "Creating...",
+  "joinInvitation": "Join with an invitation",
+  "joinInvitationHint": "Paste the invitation link sent by a workspace Owner or Admin.",
+  "invitationLink": "Invitation link",
+  "invitationPlaceholder": "https://relay.example/invite/...",
+  "validation": {
+    "enterWorkspaceName": "Enter a workspace name.",
+    "workspaceNameMin": "Workspace name must be at least 2 characters.",
+    "workspaceNameMax": "Workspace name must be 120 characters or fewer.",
+    "enterInvitation": "Enter the invitation link you received."
+  }
+}

@@ -35,7 +35,6 @@ export type ApiErrorCode =
 export interface ApiErrorResponse {
   error: {
     code: ApiErrorCode;
-    message: string;
     requestId?: string;
   };
 }

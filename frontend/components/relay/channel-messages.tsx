@@ -41,6 +41,8 @@ import {
   type ClientMessage,
 } from "@/lib/messages"
 import { createRelaySocket, type RelaySocket } from "@/lib/realtime/socket"
+import { useErrorTranslator } from "@/lib/i18n/errors"
+import { useTranslateT } from "@/lib/i18n/use-translate-t"
 import { cn } from "@/lib/utils"
 
 type HistoryState = "loading" | "ready" | "error"
@@ -66,10 +68,6 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, { weekday: "long", mont
 
 function initials(value: string) {
   return value.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
-}
-
-function messageError(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback
 }
 
 function ReplyPreview({ message }: { message: ClientMessage }) {
@@ -193,6 +191,8 @@ function MessageRow({
   onReply: (message: ClientMessage) => void
   onRetry: (message: ClientMessage) => void
 }) {
+  const errors = useErrorTranslator()
+  const messagesT = useTranslateT("messages")
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(message.content)
   const [editError, setEditError] = useState("")
@@ -200,13 +200,13 @@ function MessageRow({
   const ownMessage = message.author.id === currentUserId
   const canAct = !archived && !message.deletedAt && !message.temporary
   const canReact = canAct && !editing
-  const deliveryLabel = message.delivery === "sending" ? "Queued for delivery" : message.delivery === "failed" ? "Delivery failed" : null
+  const deliveryLabel = message.delivery === "sending" ? messagesT("queued") : message.delivery === "failed" ? messagesT("failed") : null
 
   async function submitEdit(event: FormEvent) {
     event.preventDefault()
     const parsed = validateMessageContent(editValue)
     if (!parsed.success) {
-      setEditError(parsed.message)
+      setEditError(errors.field(parsed.errorKey, parsed.errorValues))
       return
     }
     setSaving(true)
@@ -215,7 +215,7 @@ function MessageRow({
       await onEdit(message, parsed.content)
       setEditing(false)
     } catch (caught) {
-      setEditError(messageError(caught, "Message could not be edited."))
+      setEditError(errors.apiError(caught))
     } finally {
       setSaving(false)
     }
@@ -299,6 +299,9 @@ type ConversationTarget =
   | { type: "dm"; conversation: DirectConversationDTO }
 
 export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, onPresence, onReadState, target, user }: { onActivity?: (conversation: { type: "channel" | "dm"; id: string }, message: MessageDTO) => void; onAddDescription?: () => void; onInvitePeople?: () => void; onPresence?: (userId: string, status: "online" | "offline") => void; onReadState?: (readState: ConversationReadStateDTO) => void; target: ConversationTarget; user: AuthUserDTO }) {
+  const errors = useErrorTranslator()
+  const messagesT = useTranslateT("messages")
+  const commonT = useTranslateT("common")
   const [historyState, setHistoryState] = useState<HistoryState>("loading")
   const [messages, setMessages] = useState<ClientMessage[]>([])
   const [historyError, setHistoryError] = useState("")
@@ -411,7 +414,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       setHistoryState("ready")
     } catch (caught) {
       if (request !== initialRequest.current) return
-      setHistoryError(messageError(caught, "Message history could not be loaded."))
+      setHistoryError(errors.apiError(caught))
       setHistoryState("error")
     }
   }
@@ -440,7 +443,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
           void synchronizeWorkspace().catch(() => undefined)
           return
         }
-        setComposerError(event.message)
+        setComposerError(errors.code(event.code))
       })
     }
 
@@ -496,7 +499,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
     })
     socket.on("message:error", (event) => {
       if (!event.operationId) {
-        setComposerError(event.message)
+        setComposerError(errors.code(event.code))
         return
       }
       window.clearTimeout(pending.get(event.operationId))
@@ -504,7 +507,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       setMessages((current) => current.map((message) => message.operationId === event.operationId ? {
         ...message,
         delivery: "failed",
-        failureMessage: event.message,
+        failureMessage: errors.code(event.code),
       } : message))
     })
 
@@ -519,7 +522,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       socket.disconnect()
       socketRef.current = null
     }
-  }, [archived, conversationId, scheduleSynchronization, synchronizeWorkspace, workspaceId, target.type, user.id])
+  }, [archived, conversationId, errors, scheduleSynchronization, synchronizeWorkspace, workspaceId, target.type, user.id])
 
   useEffect(() => {
     if (historyState !== "ready" || messages.length === 0) return
@@ -563,7 +566,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       setHasMore(response.hasMore)
     } catch (caught) {
       olderScrollHeight.current = null
-      setHistoryError(messageError(caught, "Older messages could not be loaded."))
+      setHistoryError(errors.apiError(caught))
     } finally {
       setLoadingOlder(false)
     }
@@ -577,7 +580,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       setMessages((current) => current.map((message) => message.operationId === clientMessage.operationId ? {
         ...message,
         delivery: "failed",
-        failureMessage: "Connection is offline. Retry when reconnected.",
+        failureMessage: errors.code("REQUEST_FAILED"),
       } : message))
       return
     }
@@ -587,7 +590,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       setMessages((current) => current.map((message) => message.operationId === clientMessage.operationId ? {
         ...message,
         delivery: "failed",
-        failureMessage: "No acknowledgement received. Retry to check the saved message.",
+        failureMessage: errors.code("REQUEST_TIMEOUT"),
       } : message))
     }, ACK_TIMEOUT_MS))
     socket.emit("message:send", {
@@ -606,7 +609,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       ? validateMessageContent(draft)
       : { success: true as const, content: "", codePoints: 0 }
     if (!parsed.success) {
-      setComposerError(parsed.message)
+      setComposerError(errors.field(parsed.errorKey, parsed.errorValues))
       return
     }
     const operationId = crypto.randomUUID()
@@ -642,17 +645,17 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
   async function uploadAttachments(files: File[]) {
     if (files.length === 0) return
     if (pendingAttachments.length + files.length > MAX_ATTACHMENT_COUNT) {
-      setComposerError(`A message can include at most ${MAX_ATTACHMENT_COUNT} attachments.`)
+      setComposerError(errors.code("ATTACHMENT_LIMIT_EXCEEDED"))
       return
     }
     const oversizedFile = files.find((file) => file.size > MAX_FILE_BYTES)
     if (oversizedFile) {
-      setComposerError(`${oversizedFile.name} exceeds the 25 MB file limit.`)
+      setComposerError(errors.code("ATTACHMENT_TOO_LARGE"))
       return
     }
     const combinedBytes = pendingAttachments.reduce((total, attachment) => total + attachment.sizeBytes, 0) + files.reduce((total, file) => total + file.size, 0)
     if (combinedBytes > MAX_ATTACHMENT_BYTES) {
-      setComposerError("Attachments can total at most 50 MB per message.")
+      setComposerError(errors.code("ATTACHMENT_LIMIT_EXCEEDED"))
       return
     }
     setUploadingAttachment(true)
@@ -667,7 +670,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
         setPendingAttachments((current) => [...current, response.attachment])
       }
     } catch (caught) {
-      setComposerError(messageError(caught, "File could not be uploaded."))
+      setComposerError(errors.apiError(caught))
     } finally {
       setUploadingAttachment(false)
       setUploadProgress(null)
@@ -749,7 +752,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       if (replyingTo?.id === message.id) setReplyingTo(null)
       setMessageToDelete(null)
     } catch (caught) {
-      setHistoryError(messageError(caught, "Message could not be deleted."))
+      setHistoryError(errors.apiError(caught))
     } finally {
       setDeletingMessage(false)
     }
@@ -769,7 +772,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       })
       setMessages((current) => current.map((item) => item.id === response.messageId ? { ...item, reactions: response.reactions } : item))
     } catch (caught) {
-      setHistoryError(messageError(caught, "Reaction could not be saved."))
+      setHistoryError(errors.apiError(caught))
     }
   }
 
@@ -801,7 +804,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
         )}
         {historyState === "error" && (
           <div className="grid min-h-full place-items-center p-6">
-            <div className="max-w-sm text-center"><AlertCircle className="mx-auto size-5 text-destructive" /><h2 className="mt-3 text-sm font-semibold">Messages could not be loaded</h2><p className="mt-1 text-xs leading-5 text-signal-muted">{historyError}</p><Button className="mt-4" onClick={() => void loadInitial()} size="sm" variant="outline">Try again</Button></div>
+            <div className="max-w-sm text-center"><AlertCircle className="mx-auto size-5 text-destructive" /><h2 className="mt-3 text-sm font-semibold">{messagesT("loadErrorTitle")}</h2><p className="mt-1 text-xs leading-5 text-signal-muted">{historyError}</p><Button className="mt-4" onClick={() => void loadInitial()} size="sm" variant="outline">{commonT("tryAgain")}</Button></div>
           </div>
         )}
         {historyState === "ready" && (

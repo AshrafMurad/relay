@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { API_BASE_URL, apiRequest } from "@/lib/api/client"
 import type { MessageDTO, SearchMessagesResponse, WorkspaceDTO } from "@/lib/api/contracts"
+import { useErrorTranslator } from "@/lib/i18n/errors"
 
 function resultHref(workspaceSlug: string, message: MessageDTO) {
   return message.channelId ? `/app/${workspaceSlug}/channels/${message.channelId}` : `/app/${workspaceSlug}/dm/${message.directConversationId}`
 }
 
 export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
+  const errors = useErrorTranslator()
   const [workspace, setWorkspace] = useState<WorkspaceDTO | null>(null)
   const [query, setQuery] = useState("")
   const [queryError, setQueryError] = useState("")
@@ -26,14 +28,14 @@ export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
   useEffect(() => {
     void apiRequest<{ workspaces: WorkspaceDTO[] }>("/workspaces")
       .then(({ workspaces }) => setWorkspace(workspaces.find((item) => item.slug === workspaceSlug) ?? null))
-      .catch((caught) => setError(caught instanceof Error ? caught.message : "Workspace could not be loaded."))
-  }, [workspaceSlug])
+      .catch((caught) => setError(errors.apiError(caught)))
+  }, [errors, workspaceSlug])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!workspace) return
     if (query.trim().length < 2) {
-      setQueryError("Enter at least 2 characters to search.")
+      setQueryError(errors.field("searchMin"))
       return
     }
     setLoading(true)
@@ -43,9 +45,9 @@ export function SearchPage({ workspaceSlug }: { workspaceSlug: string }) {
       const response = await apiRequest<SearchMessagesResponse>(`/search?workspaceId=${workspace.id}&q=${encodeURIComponent(query.trim())}`)
       setResults(response.results)
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Search failed."
+      const message = errors.apiError(caught)
       setError(message)
-      toast.error("Search failed", { description: message })
+      toast.error(errors.toastTitle("searchFailed"), { description: message })
     } finally {
       setLoading(false)
     }

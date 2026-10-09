@@ -21,10 +21,7 @@ describe("apiRequest", () => {
     const { apiRequest } = await import("./client")
 
     const request = apiRequest("/slow")
-    const expectation = expect(request).rejects.toMatchObject({
-      code: "REQUEST_TIMEOUT",
-      message: "Request timed out after 15 seconds.",
-    })
+    const expectation = expect(request).rejects.toMatchObject({ code: "REQUEST_TIMEOUT" })
     await vi.advanceTimersByTimeAsync(15_000)
     await expectation
   })
@@ -40,5 +37,12 @@ describe("apiRequest", () => {
     controller.abort()
 
     await expect(request).rejects.toMatchObject({ name: "AbortError" })
+  })
+
+  it("uses API error codes without exposing backend messages", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "Internal backend detail" } }), { status: 403 }))))
+    const { apiRequest } = await import("./client")
+
+    await expect(apiRequest("/forbidden")).rejects.toMatchObject({ code: "FORBIDDEN", message: "FORBIDDEN" })
   })
 })

@@ -76,13 +76,13 @@ async function connect(url: string, index: number) {
 }
 
 async function join(client: Socket<ServerToClientEvents, ClientToServerEvents>, id = channelId) {
-  return new Promise<{ ok: true } | { code: string; message: string }>((resolve) => {
+  return new Promise<{ ok: true } | { code: string }>((resolve) => {
     client.emit("conversation:join", { workspaceId, conversation: { type: "channel", id } }, resolve);
   });
 }
 
 async function joinDm(client: Socket<ServerToClientEvents, ClientToServerEvents>, id = directConversationId) {
-  return new Promise<{ ok: true } | { code: string; message: string }>((resolve) => {
+  return new Promise<{ ok: true } | { code: string }>((resolve) => {
     client.emit("conversation:join", { workspaceId, conversation: { type: "dm", id } }, resolve);
   });
 }

@@ -38,7 +38,7 @@ async function mockWorkspaceApi(page: Page) {
     else if (path === `/workspaces/${workspace.id}/direct-conversations`) body = { conversations }
     else if (path === "/channels/channel-1/messages") body = { messages, nextCursor: null, hasMore: false }
     else if (path === "/channels/channel-1/read") body = { readState: { workspaceId: workspace.id, conversation: { type: "channel", id: "channel-1" }, userId: user.id, lastReadMessageId: "message-1", lastReadAt: now } }
-    else body = { error: { code: "NOT_FOUND", message: `Unhandled test route: ${path}` } }
+    else body = { error: { code: "NOT_FOUND" } }
     await route.fulfill({ contentType: "application/json", status: path.startsWith("/unknown") ? 404 : 200, body: JSON.stringify(body) })
   })
 }

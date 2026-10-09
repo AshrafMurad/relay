@@ -1,0 +1,23 @@
+{
+  "titleLine1": "Move fast.",
+  "titleLine2": "Lose nothing.",
+  "intro": "Relay gives small remote teams instant conversation backed by durable messages, clean reconnect recovery, and permissions that hold on every route.",
+  "createWorkspace": "Create your workspace",
+  "loginRelay": "Log in to Relay",
+  "demoChannel": "# launch-room",
+  "illustrativeConversation": "Illustrative conversation",
+  "recoveryDemo": "Recovery demo",
+  "durableOrdered": "DURABLE + ORDERED",
+  "demoUserYou": "You",
+  "demoMessage1": "The release call is made. Can we lock the channel and send the handoff?",
+  "demoMessage2": "Locked. Final notes and ownership are in the thread.",
+  "deliveredStored": "Delivered and stored",
+  "messageRecovered": "1 message recovered",
+  "demoMessage3": "I dropped briefly. The handoff still arrived in order.",
+  "durable": "Durable",
+  "messages": "messages",
+  "deduplicated": "Deduplicated",
+  "retries": "retries",
+  "scoped": "Scoped",
+  "access": "access"
+}

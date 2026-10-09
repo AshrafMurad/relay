@@ -61,9 +61,9 @@ function createWindowLimiter(limit: number, windowMs: number) {
 
 function socketError(error: unknown, operationId?: string) {
   if (error instanceof ApiError) {
-    return { operationId, code: error.code, message: error.message };
+    return { operationId, code: error.code };
   }
-  return { operationId, code: "INTERNAL_ERROR", message: "The socket event could not be processed." };
+  return { operationId, code: "INTERNAL_ERROR" };
 }
 
 export function createSocketServer(
@@ -260,7 +260,7 @@ export function createSocketServer(
 
     socket.on("conversation:join", async (event, acknowledge) => {
       if (!prisma || !socket.data.userId) {
-        const error = { code: "UNAUTHORIZED", message: "Socket authentication is required." };
+        const error = { code: "UNAUTHORIZED" };
         acknowledge?.(error);
         socket.emit("message:error", error);
         return;
@@ -302,7 +302,7 @@ export function createSocketServer(
 
     socket.on("message:send", async (event) => {
       if (!prisma || !socket.data.userId) {
-        socket.emit("message:error", { operationId: event?.operationId, code: "UNAUTHORIZED", message: "Socket authentication is required." });
+        socket.emit("message:error", { operationId: event?.operationId, code: "UNAUTHORIZED" });
         return;
       }
       try {
@@ -337,7 +337,7 @@ export function createSocketServer(
 
     socket.on("reaction:toggle", async (event) => {
       if (!prisma || !socket.data.userId) {
-        socket.emit("message:error", { code: "UNAUTHORIZED", message: "Socket authentication is required." });
+        socket.emit("message:error", { code: "UNAUTHORIZED" });
         return;
       }
       try {
@@ -364,7 +364,7 @@ export function createSocketServer(
 
     socket.on("conversation:read", async (event) => {
       if (!prisma || !socket.data.userId) {
-        socket.emit("message:error", { code: "UNAUTHORIZED", message: "Socket authentication is required." });
+        socket.emit("message:error", { code: "UNAUTHORIZED" });
         return;
       }
       try {

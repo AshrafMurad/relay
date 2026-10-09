@@ -1,0 +1,23 @@
+{
+  "loading": "Checking invitation",
+  "unavailableTitle": "Invitation unavailable",
+  "invalidLink": "This invitation link is invalid.",
+  "goToRelay": "Go to Relay",
+  "openRelay": "Open Relay",
+  "terminal": {
+    "ACCEPTED": { "title": "This invitation was already used", "detail": "Sign in to Relay to open workspaces you already belong to." },
+    "EXPIRED": { "title": "This invitation has expired", "detail": "Ask a workspace Owner or Admin to send a new invitation." },
+    "REVOKED": { "title": "This invitation was revoked", "detail": "Ask the workspace team if you still need access." }
+  },
+  "joinWorkspace": "Join {name}",
+  "invitedBody": "You have been invited to collaborate in this Relay workspace.",
+  "invitedAccount": "Invited account",
+  "workspaceRole": "Workspace role",
+  "expires": "Expires",
+  "signedInAs": "Signed in as {email}. The account email must match the invitation.",
+  "joining": "Joining...",
+  "createAccount": "Create account",
+  "login": "Log in",
+  "fallbackCheckError": "Invitation could not be checked.",
+  "fallbackAcceptError": "Invitation could not be accepted."
+}

@@ -1,0 +1,13 @@
+{
+  "fallbackWorkspaceError": "Workspace could not be loaded.",
+  "validationMin": "Enter at least 2 characters to search.",
+  "fallbackSearchError": "Search failed.",
+  "searchQuery": "Search query",
+  "placeholder": "Search saved messages",
+  "searchingHistory": "Searching saved history...",
+  "attachmentOnly": "Attachment-only message",
+  "emptyTitle": "Search workspace history",
+  "emptyBody": "Enter at least two characters to search messages you can access.",
+  "noMatchesTitle": "No matching messages",
+  "noMatchesBody": "Try a different term or open a conversation from the sidebar."
+}

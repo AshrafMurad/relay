@@ -44,7 +44,6 @@ export type MessageDeleteEvent = MessageNewEvent;
 export interface MessageErrorEvent {
   operationId?: string;
   code: string;
-  message: string;
 }
 
 export interface ReactionToggleEvent {

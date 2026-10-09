@@ -193,7 +193,7 @@ export type MessageDeleteEvent = MessageNewEvent;
 export interface MessageErrorEvent {
   operationId?: string;
   code: string;
-  message: string;
+  message?: string;
 }
 
 export interface ReactionToggleEvent {
@@ -261,5 +261,5 @@ export interface TypingUpdateEvent extends TypingEvent {
 }
 
 export interface ApiErrorResponse {
-  error: { code: string; message: string; requestId?: string };
+  error: { code: string; message?: string; requestId?: string };
 }

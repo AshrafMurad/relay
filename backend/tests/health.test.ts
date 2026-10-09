@@ -1,10 +1,13 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import express from "express";
 
 import { createApp } from "../src/app.js";
 import type { Environment } from "../src/config/env.js";
+import { ApiError } from "../src/lib/api-error.js";
 import type { DependencyProbe } from "../src/lib/database.js";
 import { createLogger } from "../src/lib/logger.js";
+import { createErrorHandler } from "../src/middleware/error-handler.js";
 
 const environment: Environment = {
   NODE_ENV: "test",
@@ -73,5 +76,32 @@ describe("health routes", () => {
     const response = await request(app).get("/api/missing").expect(404);
 
     expect(response.body).toMatchObject({ error: { code: "NOT_FOUND" } });
+    expect(response.body.error).not.toHaveProperty("message");
+  });
+
+  it("does not serialize ApiError messages", async () => {
+    const app = express();
+    app.get("/api/test", () => {
+      throw new ApiError(403, "FORBIDDEN", "Sensitive implementation detail");
+    });
+    app.use(createErrorHandler(createLogger(environment)));
+
+    const response = await request(app).get("/api/test").expect(403);
+
+    expect(response.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+    expect(response.body.error).not.toHaveProperty("message");
+  });
+
+  it("does not serialize unhandled error details", async () => {
+    const app = express();
+    app.get("/api/test", () => {
+      throw new Error("PrismaClientKnownRequestError: sensitive database detail");
+    });
+    app.use(createErrorHandler(createLogger(environment)));
+
+    const response = await request(app).get("/api/test").expect(500);
+
+    expect(response.body).toMatchObject({ error: { code: "INTERNAL_ERROR" } });
+    expect(response.body.error).not.toHaveProperty("message");
   });
 });
