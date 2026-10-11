@@ -149,13 +149,13 @@ Build and run the production stack locally for a deployment smoke check:
 ```powershell
 Copy-Item docker/.env.production.example docker/.env.production
 # edit docker/.env.production first
-docker compose --env-file docker/.env.production -f docker/compose.prod.yml up --build
+docker compose --project-directory . --env-file docker/.env.production -f docker/compose.prod.yml up --build
 ```
 
 Run the controlled release step after the API image is deployed and before opening traffic to the web service:
 
 ```powershell
-docker compose --env-file docker/.env.production -f docker/compose.prod.yml run --rm api npm run prisma:migrate:deploy
+docker compose --project-directory . --env-file docker/.env.production -f docker/compose.prod.yml run --rm api npm run prisma:migrate:deploy
 ```
 
 Smoke test production with two independent browser sessions/users:

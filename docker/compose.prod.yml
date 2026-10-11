@@ -32,7 +32,7 @@ services:
 
   api:
     build:
-      context: ../backend
+      context: ./backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -76,7 +76,7 @@ services:
 
   web:
     build:
-      context: ../frontend
+      context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:?NEXT_PUBLIC_SOCKET_URL is required}
