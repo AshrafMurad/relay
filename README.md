@@ -75,6 +75,27 @@ npm --prefix backend run seed
 
 The seed creates the Northstar Labs workspace with channels, DMs, replies, reactions, read state, and a small text attachment. All demo users share the password from `DEMO_PASSWORD` (default `RelayDemoPass123!`); the seed never prints the value.
 
+### Seeded Test Accounts
+
+Use these accounts after running the seed. Sign in with the email address.
+
+**Default password for all accounts:** `RelayDemoPass123!`
+
+If you set `DEMO_PASSWORD` when running the seed, use that value instead. The demo account password is separate from the PostgreSQL password and session secret.
+
+| Name | Email / sign-in username | Workspace role |
+| --- | --- | --- |
+| Maya Chen | `maya.owner@northstar.example` | Owner |
+| Eli Morgan | `eli.admin@northstar.example` | Admin |
+| Nora Patel | `nora.pm@northstar.example` | Member |
+| Leo Brooks | `leo.frontend@northstar.example` | Member |
+| Ava Stone | `ava.backend@northstar.example` | Member |
+| Jules Rivera | `jules.design@northstar.example` | Member |
+| Sam Okafor | `sam.qa@northstar.example` | Member |
+| Iris Hayes | `iris.support@northstar.example` | Member |
+
+For two-user testing, open separate browser profiles or a regular and private window, then sign in as Maya and Eli. Use a Member account to test role-based permissions.
+
 ## Development
 
 Run each application in a separate terminal:
