@@ -450,22 +450,49 @@
 }
 
 @media (max-width: 39.999rem) {
+  .relay-home-hero {
+    min-height: 0;
+    justify-content: flex-start;
+  }
+
   .relay-home-content {
-    gap: 2.5rem;
+    gap: 2.25rem;
+    padding-top: 2.5rem;
+    padding-bottom: 2rem;
+  }
+
+  .relay-home-kicker {
+    margin-bottom: 0.875rem;
   }
 
   .relay-home-title {
-    font-size: clamp(2.45rem, 10vw, 3.25rem);
+    font-size: clamp(2.15rem, 10vw, 3.25rem);
   }
 
   .relay-home-copy {
     max-width: none;
   }
 
+  .relay-home-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.875rem;
+    margin-top: 1.5rem;
+  }
+
+  .relay-home-primary {
+    width: 100%;
+  }
+
+  .relay-home-login {
+    align-self: center;
+    padding: 0.25rem 0.5rem;
+  }
+
   .relay-home-preview {
     width: calc(100vw - 1.5rem);
     margin-left: -1.5rem;
-    border-radius: 0;
+    border-radius: 0.75rem;
   }
 }
 

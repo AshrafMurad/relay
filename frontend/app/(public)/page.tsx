@@ -33,27 +33,30 @@ export default function Home() {
             <p className="relay-home-intro mt-5 max-w-[31ch] text-signal-panel-muted">
               {t.intro}
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-4">
+            <div className="relay-home-actions mt-8 flex flex-wrap items-center gap-x-5 gap-y-4">
               <Button className="relay-home-primary h-11 justify-between gap-4 rounded-full px-5 font-semibold" nativeButton={false} render={<Link href="/signup" />}>
                 {t.createWorkspace}
                 <ArrowUpRight className="size-4" aria-hidden="true" />
               </Button>
-              <Link className="text-sm font-medium text-signal-panel-muted underline-offset-4 transition-colors hover:text-signal-panel-text hover:underline" href="/login">
+              <Link className="relay-home-login text-sm font-medium text-signal-panel-muted underline-offset-4 transition-colors hover:text-signal-panel-text hover:underline" href="/login">
                 {t.loginRelay}
               </Link>
             </div>
           </div>
 
           <figure className="relay-home-preview relative min-w-0 overflow-hidden rounded-xl bg-signal-carbon">
-            <Image
-              alt={t.mockupAria}
-              className="block h-auto w-full"
-              height={1024}
-              priority
-              sizes="(max-width: 1023px) 100vw, 64vw"
-              src="/relay-homepage-mockup.webp"
-              width={1536}
-            />
+            <picture>
+              <source media="(max-width: 639px)" srcSet="/relay-homepage-mockup-mobile.webp" width="784" height="1024" />
+              <Image
+                alt={t.mockupAria}
+                className="block h-auto w-full"
+                height={1024}
+                priority
+                sizes="(max-width: 1023px) 100vw, 64vw"
+                src="/relay-homepage-mockup.webp"
+                width={1536}
+              />
+            </picture>
             <figcaption className="sr-only">{t.mockupLabel}</figcaption>
           </figure>
         </div>
