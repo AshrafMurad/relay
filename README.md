@@ -144,7 +144,7 @@ Production uses one public origin with reverse-proxy path routing:
 
 Use `docker/.env.production.example` as the Coolify environment checklist. Replace every placeholder secret in Coolify, keep `NEXT_PUBLIC_*` values public-origin only, and mount `relay-uploads` as a persistent volume for backend attachments.
 
-Set `RELAY_HOST` to the hostname from `WEB_ORIGIN`, without a scheme, port, or path. The production Compose file includes a higher-priority Traefik HTTPS router for `/api` and `/socket.io` that preserves both prefixes, overriding Coolify's generated prefix-stripping routes. Keep the normal Coolify domains configured for networking, frontend routing, and HTTP-to-HTTPS redirects. This override assumes Coolify's Traefik proxy with the `https` entrypoint and `letsencrypt` certificate resolver.
+The production Compose file includes a higher-priority Traefik HTTPS router for `relay.ashrafmurad.tech` that preserves `/api` and `/socket.io`, overriding Coolify's generated prefix-stripping routes. Its labels use literal values because Coolify's label escaping prevents Compose variable interpolation. For a different deployment hostname, update the router's `Host` rule and use a unique router/service name for each independent deployment. Keep the normal Coolify domains configured for networking, frontend routing, and HTTP-to-HTTPS redirects. This override assumes Coolify's Traefik proxy with the `https` entrypoint and `letsencrypt` certificate resolver; `RELAY_HOST` is no longer used.
 
 Build and run the production stack locally for a deployment smoke check:
 
