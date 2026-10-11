@@ -82,6 +82,9 @@ export function createApp(
   app.use(cookieParser());
   app.use(createOriginGuard(environment.WEB_ORIGIN));
 
+  // Infrastructure probes must not pass through protected API routers.
+  app.use("/api/health", createHealthRouter(dependencies.database, dependencies.redis));
+
   if (dependencies.database.prisma) {
     app.use(createAuthMiddleware(dependencies.database.prisma, environment.NODE_ENV === "production"));
     app.use(createUserRateLimit(300, 60_000, "RATE_LIMITED", "general-authenticated-api"));
@@ -97,7 +100,6 @@ export function createApp(
     app.use("/api/identity-images", createIdentityImageRouter(dependencies.database.prisma, environment.UPLOAD_DIR));
   }
 
-  app.use("/api/health", createHealthRouter(dependencies.database, dependencies.redis));
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));
 

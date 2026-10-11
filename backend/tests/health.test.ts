@@ -1,6 +1,7 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import express from "express";
+import type { PrismaClient } from "@prisma/client";
 
 import { createApp } from "../src/app.js";
 import type { Environment } from "../src/config/env.js";
@@ -31,6 +32,21 @@ const unavailable: DependencyProbe = { probe: async () => false };
 const failing: DependencyProbe = { probe: async () => Promise.reject(new Error("probe failed")) };
 
 describe("health routes", () => {
+  it("keeps probes public when database-backed protected routers are enabled", async () => {
+    const app = createApp(
+      environment,
+      { database: { ...available, prisma: {} as PrismaClient }, redis: available },
+      createLogger(environment),
+    );
+
+    await request(app).get("/api/health/live").expect(200);
+    await request(app).get("/api/health/ready").expect(200);
+    const response = await request(app)
+      .get("/api/workspaces/00000000-0000-4000-8000-000000000001/direct-conversations")
+      .expect(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
   it("reports process liveness", async () => {
     const app = createApp(environment, { database: available, redis: available }, createLogger(environment));
     const response = await request(app).get("/api/health/live").expect(200);
