@@ -60,6 +60,17 @@ services:
       - relay-uploads:/app/storage/uploads
     expose:
       - "4000"
+    # Coolify's generated path routers strip prefixes. This higher-priority
+    # router forwards the canonical origin's API/socket paths unchanged.
+    labels:
+      - "traefik.enable=true"
+      - 'traefik.http.routers.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.rule=Host(`${RELAY_HOST:-relay.example.com}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`))'
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.entrypoints=https"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.priority=1000"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.tls=true"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.service=${COOLIFY_RESOURCE_UUID:-relay}-api-preserve"
+      - "traefik.http.services.${COOLIFY_RESOURCE_UUID:-relay}-api-preserve.loadbalancer.server.port=4000"
     init: true
     read_only: true
     tmpfs:
