@@ -17,6 +17,7 @@ No user should be able to access data or real-time events outside workspaces and
 - Email verification, password reset, and Google OAuth are not part of the current product scope.
 - Password/email changes and revoking all other sessions require a session no older than 15 minutes.
 - A stale session receives `SESSION_NOT_FRESH` and must reauthenticate before retrying the protected action.
+- Login protection uses a pre-verification request limit, progressive failed-credential cooldowns per IP/email pair, and an IP-wide failed-login budget. Successful logins reset pair history; an email-only account lockout is not used. Limits are recorded in `16-SPRINT-0-DECISIONS.md`.
 
 ## 3. Authorization Layers
 

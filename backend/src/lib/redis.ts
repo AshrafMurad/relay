@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 import type { DependencyProbe } from "./database.js";
 import type { Logger } from "./logger.js";
 import type { RateLimitStore } from "./rate-limiter.js";
+import { LOGIN_POLICY, type LoginAttemptStore } from "./login-protection.js";
 
-export interface RedisConnection extends DependencyProbe, RateLimitStore {
+export interface RedisConnection extends DependencyProbe, RateLimitStore, LoginAttemptStore {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   markPresenceOnline(userId: string, socketId: string): Promise<void>;
@@ -39,6 +40,55 @@ end
 redis.call('ZADD', KEYS[1], now, ARGV[3])
 redis.call('PEXPIRE', KEYS[1], window)
 return {1, 0}
+`;
+
+const LOGIN_BEGIN_SCRIPT = `
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local window = ${LOGIN_POLICY.failureWindowMs}
+redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now - window)
+redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', now)
+local blocked = tonumber(redis.call('HGET', KEYS[1], 'blocked') or '0')
+if blocked > now then return {0, blocked - now} end
+local lease = tonumber(redis.call('HGET', KEYS[1], 'lease') or '0')
+if lease > now then return {0, 1000} end
+if redis.call('ZCARD', KEYS[2]) + redis.call('ZCARD', KEYS[3]) >= ${LOGIN_POLICY.ipFailureLimit} then
+  local retryAt = now + window
+  local failure = redis.call('ZRANGE', KEYS[2], 0, 0, 'WITHSCORES')
+  local pending = redis.call('ZRANGE', KEYS[3], 0, 0, 'WITHSCORES')
+  if #failure > 0 then retryAt = math.min(retryAt, tonumber(failure[2]) + window) end
+  if #pending > 0 then retryAt = math.min(retryAt, tonumber(pending[2])) end
+  return {0, math.max(1, retryAt - now)}
+end
+redis.call('HSET', KEYS[1], 'token', ARGV[1], 'lease', now + ${LOGIN_POLICY.reservationMs})
+redis.call('PEXPIRE', KEYS[1], window)
+redis.call('ZADD', KEYS[3], now + ${LOGIN_POLICY.reservationMs}, ARGV[1])
+redis.call('PEXPIRE', KEYS[3], window)
+return {1, 0}
+`;
+
+const LOGIN_FINISH_SCRIPT = `
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+redis.call('ZREM', KEYS[3], ARGV[1])
+if redis.call('HGET', KEYS[1], 'token') ~= ARGV[1] then return 0 end
+local lease = tonumber(redis.call('HGET', KEYS[1], 'lease') or '0')
+redis.call('HDEL', KEYS[1], 'token', 'lease')
+if lease <= now or ARGV[2] == 'cancelled' then return 0 end
+if ARGV[2] == 'success' then
+  redis.call('DEL', KEYS[1])
+  return 1
+end
+local failures = redis.call('HINCRBY', KEYS[1], 'failures', 1)
+local cooldown = 0
+if failures >= ${LOGIN_POLICY.cooldownThreshold} then
+  cooldown = math.min(${LOGIN_POLICY.maxCooldownMs}, 1000 * 2 ^ math.min(10, failures - ${LOGIN_POLICY.cooldownThreshold}))
+end
+redis.call('HSET', KEYS[1], 'blocked', now + cooldown)
+redis.call('PEXPIRE', KEYS[1], ${LOGIN_POLICY.failureWindowMs})
+redis.call('ZADD', KEYS[2], now, ARGV[1])
+redis.call('PEXPIRE', KEYS[2], ${LOGIN_POLICY.failureWindowMs})
+return 1
 `;
 
 export function createRedisConnection(url: string, logger: Logger): RedisConnection {
@@ -145,6 +195,34 @@ export function createRedisConnection(url: string, logger: Logger): RedisConnect
         return { allowed: Number(result[0]) === 1, retryAfterMs: Number(result[1]) };
       } catch (error) {
         if (rateLimitsHealthy) logger.warn("Redis rate limits unavailable; using single-instance fallback");
+        rateLimitsHealthy = false;
+        throw error;
+      }
+    },
+    async beginLoginAttempt(pairKey, ipKey, attemptId) {
+      try {
+        if (!client.isReady) throw new Error("Redis login protection unavailable");
+        const result = await client.eval(LOGIN_BEGIN_SCRIPT, {
+          keys: [pairKey, `${ipKey}:failures`, `${ipKey}:pending`],
+          arguments: [attemptId],
+        });
+        if (!Array.isArray(result) || result.length !== 2) throw new Error("Invalid Redis login protection response");
+        rateLimitsHealthy = true;
+        return { allowed: Number(result[0]) === 1, retryAfterMs: Number(result[1]) };
+      } catch (error) {
+        rateLimitsHealthy = false;
+        throw error;
+      }
+    },
+    async finishLoginAttempt(pairKey, ipKey, attemptId, outcome) {
+      try {
+        if (!client.isReady) throw new Error("Redis login protection unavailable");
+        await client.eval(LOGIN_FINISH_SCRIPT, {
+          keys: [pairKey, `${ipKey}:failures`, `${ipKey}:pending`],
+          arguments: [attemptId, outcome],
+        });
+        rateLimitsHealthy = true;
+      } catch (error) {
         rateLimitsHealthy = false;
         throw error;
       }

@@ -260,7 +260,9 @@ Typing stops immediately after send, blur, conversation change, or disconnect.
 | Operation | Limit |
 | --- | --- |
 | General authenticated API | 300 requests per minute per user |
-| Sign-in attempts | 5 per 15 minutes per IP and normalized email |
+| Sign-in requests | 100 per minute per IP, before password verification |
+| Failed sign-ins per IP/email pair | After 5 failures, 1-second cooldown doubling on each subsequent failure, capped at 15 minutes |
+| Failed sign-ins across accounts | 50 per rolling 15 minutes per IP |
 | Sign-up attempts | 5 per hour per IP |
 | Invitations sent | 20 per hour per workspace and actor |
 | Invitation acceptance | 10 per 15 minutes per IP |
@@ -272,6 +274,8 @@ Typing stops immediately after send, blur, conversation change, or disconnect.
 | Upload starts | 10 per minute per user |
 
 Redis coordinates distributed application rate limits. If Redis is unavailable, the single-instance V1 API enforces the same numeric limits with in-process counters, marks readiness as degraded, reports presence as unavailable, disables typing indicators, and continues PostgreSQL-backed durable operations. In-process counters reset on restart and are not a multi-instance substitute.
+
+The sign-in policy was revised on October 11, 2026 with user approval to replace the original five-request IP/email limits. Only `INVALID_CREDENTIALS` outcomes count as failed sign-ins; malformed requests and infrastructure errors count only toward the request limit. A successful login resets the IP/email pair's failures, without erasing the IP-wide failure history. Pair history also resets after 15 minutes without an admitted attempt or credential failure. Rejected retries do not extend cooldowns. One in-flight check per pair and atomic IP reservations prevent concurrent requests from bypassing the failure limits; abandoned reservations expire after 60 seconds. There is no email-only account lockout. New versioned limiter keys prevent the previous policy's active counters from carrying over. See `17-PREPRODUCTION-HARDENING.md` for the provider research and implementation notes.
 
 ## 14. Role Matrix
 

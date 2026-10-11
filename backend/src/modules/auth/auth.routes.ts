@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { Environment } from "../../config/env.js";
 import { ApiError } from "../../lib/api-error.js";
+import { LOGIN_POLICY, type LoginOutcome, type LoginProtection } from "../../lib/login-protection.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createRequestRateLimit } from "../../middleware/rate-limit.js";
@@ -31,7 +32,7 @@ function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
   return parsed.data;
 }
 
-export function createAuthRouter(prisma: PrismaClient, environment: Pick<Environment, "NODE_ENV" | "UPLOAD_DIR">) {
+export function createAuthRouter(prisma: PrismaClient, environment: Pick<Environment, "NODE_ENV" | "UPLOAD_DIR">, loginProtection: LoginProtection) {
   const router = Router();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IDENTITY_IMAGE_BYTES, files: 1 } });
 
@@ -57,16 +58,30 @@ export function createAuthRouter(prisma: PrismaClient, environment: Pick<Environ
 
   router.post(
     "/signin",
-    createRequestRateLimit(5, 15 * 60_000, (request) => request.ip, "RATE_LIMITED", "auth-signin-ip"),
-    createRequestRateLimit(5, 15 * 60_000, (request) => typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "unknown", "RATE_LIMITED", "auth-signin-email"),
+    createRequestRateLimit(LOGIN_POLICY.requestLimit, LOGIN_POLICY.requestWindowMs, (request) => request.ip, "RATE_LIMITED", "auth-signin-requests-v2"),
     asyncHandler(async (request, response) => {
       const input = parseBody(signInSchema, request.body);
-      const { token, user } = await signIn(prisma, input, {
-        ipAddress: request.ip,
-        userAgent: request.get("user-agent"),
-      });
-      response.cookie(SESSION_COOKIE_NAME, token, sessionCookieOptions(environment.NODE_ENV === "production"));
-      response.json({ user });
+      const attempt = await loginProtection.begin(request.ip ?? "unknown", input.email);
+      if (!attempt.allowed) {
+        response.setHeader("retry-after", Math.ceil(attempt.retryAfterMs / 1_000));
+        throw new ApiError(429, "RATE_LIMITED", "Too many sign-in attempts. Please wait before retrying.");
+      }
+      let outcome: LoginOutcome = "cancelled";
+      try {
+        const { token, user } = await signIn(prisma, input, {
+          ipAddress: request.ip,
+          userAgent: request.get("user-agent"),
+        });
+        outcome = "success";
+        await attempt.finish(outcome);
+        response.cookie(SESSION_COOKIE_NAME, token, sessionCookieOptions(environment.NODE_ENV === "production"));
+        response.json({ user });
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "INVALID_CREDENTIALS") outcome = "failure";
+        throw error;
+      } finally {
+        await attempt.finish(outcome);
+      }
     }),
   );
 

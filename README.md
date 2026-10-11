@@ -96,6 +96,10 @@ If you set `DEMO_PASSWORD` when running the seed, use that value instead. The de
 
 For two-user testing, open separate browser profiles or a regular and private window, then sign in as Maya and Eli. Use a Member account to test role-based permissions.
 
+### Sign-in Rate Limits
+
+Successful logins do not consume the failed-login budget. After five wrong passwords for the same email from the same IP, sign-in is temporarily blocked for one second; each subsequent failure doubles the wait, up to 15 minutes. A successful login resets that IP/email pair. Other accounts on the same network remain usable unless the IP accumulates 50 failed logins across accounts in 15 minutes. All sign-in requests also have a 100-per-minute IP limit. A blocked response includes `Retry-After` in seconds; repeated blocked attempts do not extend the credential cooldown. Full policy and provider references are in `docs/17-PREPRODUCTION-HARDENING.md`.
+
 ## Development
 
 Run each application in a separate terminal:

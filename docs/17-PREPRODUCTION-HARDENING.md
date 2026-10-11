@@ -1,5 +1,28 @@
 # Relay — Preproduction Hardening
 
+## October 11: Outcome-aware sign-in protection
+
+Provider guidance reviewed:
+
+- [Auth0 brute-force protection](https://auth0.com/docs/secure/attack-protection/brute-force-protection) tracks incorrect attempts from an IP to a user identifier, defaults to a threshold of 10, and disables global account lockout by default.
+- [Amazon Cognito lockout behavior](https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow-things-to-know.html#authentication-flow-lockout-behavior) starts a one-second cooldown after five failures, doubles subsequent cooldowns up to approximately 15 minutes, ignores attempts made while blocked, and resets after successful authentication or 15 minutes of inactivity.
+
+Relay combines the IP/account scoping pattern with progressive cooldowns; this is a Relay-specific policy, not an exact reproduction of either provider:
+
+- 100 sign-in requests per minute per IP before password verification, including malformed and successful requests.
+- After five incorrect credentials for one normalized IP/email pair: 1, 2, 4, 8, ... seconds of cooldown, capped at 900 seconds. Blocked retries do not add failures or prolong cooldowns.
+- 50 incorrect credentials per rolling 15 minutes per IP across accounts, mitigating password spraying on a shared network without blocking it after five successful logins.
+- Success resets only the pair; it does not erase broader IP failures. Validation and database errors do not count as credential failures. Unknown-account and wrong-password failures retain the same `INVALID_CREDENTIALS` response.
+- `backend/src/lib/login-protection.ts` mirrors reservations and outcomes locally, uses hashed identities, sweeps expired entries, and caps fallback state at 50,000 combined pair/IP entries.
+- Redis Lua atomically reserves a single in-flight password check per pair and counts pending IP checks alongside completed failures. Reservations expire after 60 seconds, completion is token-scoped/idempotent, and a late completion cannot overwrite a newer reservation.
+- Redis failure falls back to mirrored single-instance state; Redis login-protection errors degrade readiness. A completion-store failure does not turn a valid login into an application error.
+- `429 RATE_LIMITED` includes `Retry-After` in seconds. This change preserves that HTTP contract and does not add a frontend countdown.
+- Versioned keys isolate the new policy from old sign-in counters, so upgrading does not require clearing Redis or unrelated limits.
+
+Regression coverage includes progressive cooldown/expiry, successful login reset, shared-network and IP isolation, concurrent reservations, cancellation and idempotent completion, Redis failure, HTTP `Retry-After`, and independent Redis/API instances. Run the backend checks and integration tests described below; this section records design and coverage, not a production deployment sign-off.
+
+Validation: backend lint, typecheck, build, and all 87 unit tests passed under Node.js 24. The full 55-test integration suite passed against live Redis and an isolated PostgreSQL 18 database with all six migrations applied. The first attempt using the existing local database was blocked by a credential mismatch; validation did not change that database's password or data.
+
 ## Phase 1: Release Blockers
 
 ### Shared rate limiting

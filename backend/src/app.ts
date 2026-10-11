@@ -11,6 +11,7 @@ import type { Environment } from "./config/env.js";
 import type { DependencyProbe } from "./lib/database.js";
 import type { Logger } from "./lib/logger.js";
 import { createRateLimiter, type RateLimiter, type RateLimitStore } from "./lib/rate-limiter.js";
+import { createLoginProtection, type LoginAttemptStore } from "./lib/login-protection.js";
 import type { RealtimeEventBus } from "./realtime/realtime-events.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error-handler.js";
@@ -30,7 +31,7 @@ import type { PrismaClient } from "@prisma/client";
 
 export interface ApplicationDependencies {
   database: DependencyProbe & { prisma?: PrismaClient };
-  redis: DependencyProbe & Partial<RateLimitStore>;
+  redis: DependencyProbe & Partial<RateLimitStore & LoginAttemptStore>;
   realtime?: RealtimeEventBus;
   rateLimiter?: RateLimiter;
 }
@@ -43,6 +44,11 @@ export function createApp(
   const app = express();
   const rateLimiter = dependencies.rateLimiter ?? createRateLimiter(
     dependencies.redis.consumeRateLimit ? dependencies.redis as DependencyProbe & RateLimitStore : undefined,
+  );
+  const loginProtection = createLoginProtection(
+    dependencies.redis.beginLoginAttempt && dependencies.redis.finishLoginAttempt
+      ? dependencies.redis as DependencyProbe & LoginAttemptStore
+      : undefined,
   );
   app.use((request, _response, next) => {
     request.rateLimiter = rateLimiter;
@@ -88,7 +94,7 @@ export function createApp(
   if (dependencies.database.prisma) {
     app.use(createAuthMiddleware(dependencies.database.prisma, environment.NODE_ENV === "production"));
     app.use(createUserRateLimit(300, 60_000, "RATE_LIMITED", "general-authenticated-api"));
-    app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment));
+    app.use("/api/auth", createAuthRouter(dependencies.database.prisma, environment, loginProtection));
     app.use("/api/workspaces", createWorkspaceRouter(dependencies.database.prisma, environment.UPLOAD_DIR, dependencies.realtime));
     app.use("/api", createDirectConversationRouter(dependencies.database.prisma));
     app.use("/api/channels", createChannelRouter(dependencies.database.prisma));
