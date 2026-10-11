@@ -146,6 +146,8 @@ Use `docker/.env.production.example` as the Coolify environment checklist. Repla
 
 Build and run the production stack locally for a deployment smoke check:
 
+The production stack exposes web/API ports only inside Docker networking. Access it through Coolify's reverse proxy or an equivalent local reverse proxy, routing to web port 3000 and API port 4000.
+
 ```powershell
 Copy-Item docker/.env.production.example docker/.env.production
 # edit docker/.env.production first

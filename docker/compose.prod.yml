@@ -58,8 +58,8 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:?TRUST_PROXY is required}
     volumes:
       - relay-uploads:/app/storage/uploads
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     init: true
     read_only: true
     tmpfs:
@@ -88,8 +88,8 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
       NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:?NEXT_PUBLIC_SOCKET_URL is required}
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     init: true
     read_only: true
     tmpfs:
