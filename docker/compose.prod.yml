@@ -47,12 +47,12 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
-      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
-      SMTP_PORT: ${SMTP_PORT:?SMTP_PORT is required}
-      SMTP_SECURE: ${SMTP_SECURE:?SMTP_SECURE is required}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM is required}
+      EMAIL_FROM: ${EMAIL_FROM:-Relay <no-reply@example.com>}
       UPLOAD_DIR: /app/storage/uploads
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TRUST_PROXY: ${TRUST_PROXY:?TRUST_PROXY is required}
