@@ -76,7 +76,29 @@ export function createSocketServer(
     pingInterval: 25_000,
     pingTimeout: 20_000,
     allowRequest(request, callback) {
-      callback(null, request.headers.origin === environment.WEB_ORIGIN);
+      const origin = request.headers.origin;
+      if (origin !== undefined) {
+        callback(null, origin === environment.WEB_ORIGIN);
+        return;
+      }
+
+      // Same-origin polling GETs may omit Origin. Fetch metadata or a
+      // matching Referer supplies browser origin evidence in that case.
+      const fetchSite = request.headers["sec-fetch-site"];
+      if (fetchSite !== undefined && fetchSite !== "same-origin") {
+        callback(null, false);
+        return;
+      }
+      const referer = request.headers.referer;
+      if (referer !== undefined) {
+        try {
+          callback(null, new URL(referer).origin === environment.WEB_ORIGIN);
+        } catch {
+          callback(null, false);
+        }
+        return;
+      }
+      callback(null, fetchSite === "same-origin");
     },
   });
 

@@ -61,6 +61,10 @@ Reverse proxy must support WebSocket upgrade headers and long-lived connections.
 
 Coolify/Traefik should be configured accordingly.
 
+Preserve `Origin`, `Sec-Fetch-Site`, and `Referer` headers when forwarding `/socket.io/*`. Browser polling GETs on the shared public origin can omit `Origin`; the backend accepts those only with same-origin fetch metadata or a matching referer. Explicit foreign origins and cross-site fetch metadata are rejected. Session authentication still runs before accepting the Socket.IO connection.
+
+If polling returns HTTP 403 with `{"code":4,"message":"Forbidden"}`, check the handshake origin evidence and ensure `WEB_ORIGIN` exactly matches the public origin (no trailing slash). A polling request with `Origin: https://relay.example.com` should return HTTP 200 and an Engine.IO open packet; repeat with `Sec-Fetch-Site: same-origin` and a matching `Referer`, without `Origin`, to verify browser polling. Then verify authenticated connections and message delivery with two independent browser clients.
+
 The proxy must allow at least 70 seconds to receive/forward multipart uploads so it does not cut off the application's 60-second upload deadline. Permit at least 90 seconds of idle time on upgraded WebSocket connections, with no short total-response deadline on those connections. Socket.IO sends pings every 25 seconds with a 20-second ping timeout. Verify these settings through the deployed HTTPS origin using a slow upload and a connection that remains open through several ping cycles; Compose configuration validation alone does not verify the external proxy.
 
 ## 7. PostgreSQL

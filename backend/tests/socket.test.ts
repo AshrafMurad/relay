@@ -23,6 +23,39 @@ afterEach(async () => {
 });
 
 describe("Socket.IO foundation", () => {
+  it.each([
+    { name: "matching Origin", headers: { Origin: environment.WEB_ORIGIN }, status: 200 },
+    { name: "same-origin polling without Origin", headers: { "Sec-Fetch-Site": "same-origin", Referer: `${environment.WEB_ORIGIN}/workspaces/demo` }, status: 200 },
+    { name: "same-origin metadata without Referer", headers: { "Sec-Fetch-Site": "same-origin" }, status: 200 },
+    { name: "matching Referer without fetch metadata", headers: { Referer: `${environment.WEB_ORIGIN}/workspaces/demo` }, status: 200 },
+    { name: "foreign Origin despite same-origin metadata", headers: { Origin: "https://foreign.example", "Sec-Fetch-Site": "same-origin" }, status: 403 },
+    { name: "null Origin", headers: { Origin: "null" }, status: 403 },
+    { name: "cross-site metadata despite matching Referer", headers: { "Sec-Fetch-Site": "cross-site", Referer: environment.WEB_ORIGIN }, status: 403 },
+    { name: "same-site sibling origin", headers: { "Sec-Fetch-Site": "same-site", Referer: "http://localhost:3001/" }, status: 403 },
+    { name: "foreign Referer", headers: { Referer: "https://foreign.example/" }, status: 403 },
+    { name: "malformed Referer", headers: { Referer: "invalid" }, status: 403 },
+    { name: "no origin evidence", headers: {}, status: 403 },
+  ])("checks polling handshake origin evidence: $name", async ({ headers, status }) => {
+    const httpServer = createServer();
+    openServers.push(httpServer);
+    const io = createSocketServer(httpServer, environment, createLogger({ LOG_LEVEL: "fatal" }));
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const address = httpServer.address();
+    if (!address || typeof address === "string") throw new Error("Expected an assigned TCP port");
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/socket.io/?EIO=4&transport=polling`, {
+        headers: headers as Record<string, string>,
+      });
+      expect(response.status).toBe(status);
+      if (status === 200) expect(await response.text()).toMatch(/^0\{"sid":/);
+      else expect(await response.json()).toEqual({ code: 4, message: "Forbidden" });
+    } finally {
+      await new Promise<void>((resolve) => io.close(() => resolve()));
+      openServers.splice(openServers.indexOf(httpServer), 1);
+    }
+  });
+
   it("uses typed domain:action system events", async () => {
     const httpServer = createServer();
     openServers.push(httpServer);
@@ -32,23 +65,31 @@ describe("Socket.IO foundation", () => {
     const address = httpServer.address();
     if (!address || typeof address === "string") throw new Error("Expected an assigned TCP port");
 
-    const client: Socket<ServerToClientEvents, ClientToServerEvents> = createClient(
-      `http://127.0.0.1:${address.port}`,
-      { extraHeaders: { Origin: environment.WEB_ORIGIN } },
-    );
+    const clients: Array<Socket<ServerToClientEvents, ClientToServerEvents>> = [
+      createClient(`http://127.0.0.1:${address.port}`, {
+        extraHeaders: { Origin: environment.WEB_ORIGIN },
+      }),
+      createClient(`http://127.0.0.1:${address.port}`, {
+        transports: ["polling"],
+        extraHeaders: { "Sec-Fetch-Site": "same-origin", Referer: `${environment.WEB_ORIGIN}/` },
+      }),
+    ];
 
     try {
-      const ready = await new Promise<{ connectedAt: string }>((resolve) => {
-        client.on("system:ready", resolve);
-      });
-      const pong = await new Promise<{ receivedAt: string }>((resolve) => {
-        client.emit("system:ping", resolve);
-      });
+      await Promise.all(clients.map(async (client) => {
+        const ready = await new Promise<{ connectedAt: string }>((resolve) => {
+          client.on("system:ready", resolve);
+        });
+        const pong = await new Promise<{ receivedAt: string }>((resolve) => {
+          client.emit("system:ping", resolve);
+        });
 
-      expect(Date.parse(ready.connectedAt)).not.toBeNaN();
-      expect(Date.parse(pong.receivedAt)).not.toBeNaN();
+        expect(Date.parse(ready.connectedAt)).not.toBeNaN();
+        expect(Date.parse(pong.receivedAt)).not.toBeNaN();
+      }));
+      expect(clients[0]!.id).not.toBe(clients[1]!.id);
     } finally {
-      client.close();
+      clients.forEach((client) => client.close());
       await new Promise<void>((resolve) => io.close(() => resolve()));
       openServers.splice(openServers.indexOf(httpServer), 1);
     }
