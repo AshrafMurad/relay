@@ -1,24 +1,27 @@
-import { randomUUID, scrypt as scryptCallback } from "node:crypto";
+import "dotenv/config";
+
+import { randomBytes, randomUUID, scrypt as scryptCallback } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import { PrismaClient, type WorkspaceRole } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
-const scrypt = promisify(scryptCallback);
-const demoPassword = process.env.DEMO_PASSWORD ?? "RelayDemoPass123!";
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DATABASE_URL is required to run the demo seed.");
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl, connectionTimeoutMillis: 5_000 }) });
+const demoPassword = process.env.DEMO_PASSWORD ?? "123456";
 const workspaceId = "58d22ca3-1f35-4702-8642-9222f5f34bc0";
 
 const users: Array<{ id: string; email: string; name: string; role: WorkspaceRole; image: string }> = [
-  { id: "e23ac614-dbb6-4246-ab99-ff81a78a6d12", email: "maya.owner@northstar.example", name: "Maya Chen", role: "OWNER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Maya%20Chen" },
-  { id: "13a94bb0-6240-44b5-a3aa-d51f7f2fb9d3", email: "eli.admin@northstar.example", name: "Eli Morgan", role: "ADMIN", image: "https://api.dicebear.com/9.x/initials/svg?seed=Eli%20Morgan" },
-  { id: "006d1c79-bf52-41bb-9920-5cef3265a495", email: "nora.pm@northstar.example", name: "Nora Patel", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Nora%20Patel" },
-  { id: "b280f087-58b0-433d-bc1a-895b5b49cc43", email: "leo.frontend@northstar.example", name: "Leo Brooks", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Leo%20Brooks" },
-  { id: "e1c043f7-3903-41dc-9993-1c473f2e1b47", email: "ava.backend@northstar.example", name: "Ava Stone", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Ava%20Stone" },
-  { id: "5f298ec0-f470-47c8-b32b-708a50bb1bd4", email: "jules.design@northstar.example", name: "Jules Rivera", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Jules%20Rivera" },
-  { id: "fc8a4fb0-bf87-4d82-9800-4e7c9d9ab808", email: "sam.qa@northstar.example", name: "Sam Okafor", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Sam%20Okafor" },
-  { id: "8e061faa-f64c-489c-8474-94a4c6ac4d51", email: "iris.support@northstar.example", name: "Iris Hayes", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Iris%20Hayes" },
+  { id: "e23ac614-dbb6-4246-ab99-ff81a78a6d12", email: "owner@example.com", name: "Maya Chen", role: "OWNER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Maya%20Chen" },
+  { id: "13a94bb0-6240-44b5-a3aa-d51f7f2fb9d3", email: "admin@example.com", name: "Eli Morgan", role: "ADMIN", image: "https://api.dicebear.com/9.x/initials/svg?seed=Eli%20Morgan" },
+  { id: "006d1c79-bf52-41bb-9920-5cef3265a495", email: "user@example.com", name: "Nora Patel", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Nora%20Patel" },
+  { id: "b280f087-58b0-433d-bc1a-895b5b49cc43", email: "user2@example.com", name: "Leo Brooks", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Leo%20Brooks" },
+  { id: "e1c043f7-3903-41dc-9993-1c473f2e1b47", email: "user3@example.com", name: "Ava Stone", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Ava%20Stone" },
+  { id: "5f298ec0-f470-47c8-b32b-708a50bb1bd4", email: "user4@example.com", name: "Jules Rivera", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Jules%20Rivera" },
+  { id: "fc8a4fb0-bf87-4d82-9800-4e7c9d9ab808", email: "user5@example.com", name: "Sam Okafor", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Sam%20Okafor" },
+  { id: "8e061faa-f64c-489c-8474-94a4c6ac4d51", email: "user6@example.com", name: "Iris Hayes", role: "MEMBER", image: "https://api.dicebear.com/9.x/initials/svg?seed=Iris%20Hayes" },
 ];
 
 const channels = ["general", "product", "engineering", "design", "support", "random"] as const;
@@ -58,8 +61,13 @@ const topics: Record<(typeof channels)[number], string[]> = {
 };
 
 async function hashPassword(password: string) {
-  const salt = "relay-demo-seed-salt";
-  const derived = (await scrypt(password, salt, 64)) as Buffer;
+  const salt = randomBytes(16).toString("base64url");
+  const derived = await new Promise<Buffer>((resolve, reject) => {
+    scryptCallback(password, salt, 64, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (error, key) => {
+      if (error) reject(error);
+      else resolve(key);
+    });
+  });
   return `scrypt:${salt}:${derived.toString("base64url")}`;
 }
 
@@ -90,20 +98,45 @@ async function createDemoAttachment(messageId: string, uploaderId: string) {
 }
 
 async function main() {
-  const password = await hashPassword(demoPassword);
+  if (demoPassword.length < 6 || demoPassword.length > 128) {
+    throw new Error("DEMO_PASSWORD must contain 6 to 128 characters.");
+  }
+  // Fail before recreating the demo workspace if a target email belongs to a
+  // non-demo user. Never silently replace an independently created account.
+  const existingUsers = await prisma.user.findMany({ where: { email: { in: users.map((user) => user.email) } } });
+  for (const existing of existingUsers) {
+    if (users.find((user) => user.email === existing.email)?.id !== existing.id) {
+      throw new Error(`Cannot seed ${existing.email}: this email belongs to a non-demo user.`);
+    }
+  }
+  const existingCredentials = await prisma.account.findMany({
+    where: { providerId: "credential", accountId: { in: users.map((user) => user.email) } },
+  });
+  for (const existing of existingCredentials) {
+    if (users.find((user) => user.email === existing.accountId)?.id !== existing.userId) {
+      throw new Error(`Cannot seed ${existing.accountId}: these credentials belong to a non-demo user.`);
+    }
+  }
 
   await prisma.workspace.deleteMany({ where: { OR: [{ id: workspaceId }, { slug: "northstar-labs" }] } });
 
   for (const user of users) {
-    await prisma.user.upsert({
-      where: { id: user.id },
-      update: { email: user.email, name: user.name, image: user.image, emailVerified: true },
-      create: { id: user.id, email: user.email, name: user.name, image: user.image, emailVerified: true },
-    });
-    await prisma.account.upsert({
-      where: { providerId_accountId: { providerId: "credential", accountId: user.email } },
-      update: { userId: user.id, password },
-      create: { userId: user.id, providerId: "credential", accountId: user.email, password },
+    const password = await hashPassword(demoPassword);
+    await prisma.$transaction(async (transaction) => {
+      await transaction.user.upsert({
+        where: { id: user.id },
+        update: { email: user.email, name: user.name, image: user.image, emailVerified: true },
+        create: { id: user.id, email: user.email, name: user.name, image: user.image, emailVerified: true },
+      });
+      await transaction.account.deleteMany({
+        where: { userId: user.id, providerId: "credential", accountId: { not: user.email } },
+      });
+      await transaction.account.upsert({
+        where: { providerId_accountId: { providerId: "credential", accountId: user.email } },
+        update: { userId: user.id, password },
+        create: { userId: user.id, providerId: "credential", accountId: user.email, password },
+      });
+      await transaction.session.deleteMany({ where: { userId: user.id } });
     });
   }
 
@@ -202,11 +235,12 @@ async function main() {
   });
 
   console.log("Seeded Northstar Labs demo workspace. Demo users share the DEMO_PASSWORD value (default documented in README).");
+  console.table(users.map(({ name, email, role }) => ({ name, email, role })));
 }
 
 main()
   .catch((error: unknown) => {
-    console.error(error);
+    console.error("Demo seed failed:", error instanceof Error ? error.message : "Unknown error");
     process.exitCode = 1;
   })
   .finally(async () => {

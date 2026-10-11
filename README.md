@@ -73,26 +73,40 @@ Seed a demo workspace for screenshots, interviews, and smoke testing:
 npm --prefix backend run seed
 ```
 
-The seed creates the Northstar Labs workspace with channels, DMs, replies, reactions, read state, and a small text attachment. All demo users share the password from `DEMO_PASSWORD` (default `RelayDemoPass123!`); the seed never prints the value.
+The seed creates the Northstar Labs workspace with channels, DMs, replies, reactions, read state, and a small text attachment. All demo users share the password from `DEMO_PASSWORD` (default `123456`); the seed never prints the value.
+
+In Coolify, after deploying the updated API image and applying database migrations, open **Terminal → api** and run:
+
+```sh
+npm run seed
+```
+
+The script runs directly with Node.js 24, loads the backend environment, and is included in the production image. It does not require `tsx` or a separate package download. To explicitly select the documented demo password regardless of an existing `DEMO_PASSWORD` setting:
+
+```sh
+DEMO_PASSWORD='123456' npm run seed
+```
+
+Rerunning the seed recreates the Northstar Labs demo workspace and its content, updates all eight demo account passwords, removes their legacy demo-email credentials, and signs out their existing sessions. It retains their stable user IDs. If a new demo email belongs to an independently created user, the script stops before rebuilding the workspace instead of replacing that user.
 
 ### Seeded Test Accounts
 
 Use these accounts after running the seed. Sign in with the email address.
 
-**Default password for all accounts:** `RelayDemoPass123!`
+**Default password for all accounts:** `123456`
 
 If you set `DEMO_PASSWORD` when running the seed, use that value instead. The demo account password is separate from the PostgreSQL password and session secret.
 
 | Name | Email / sign-in username | Workspace role |
 | --- | --- | --- |
-| Maya Chen | `maya.owner@northstar.example` | Owner |
-| Eli Morgan | `eli.admin@northstar.example` | Admin |
-| Nora Patel | `nora.pm@northstar.example` | Member |
-| Leo Brooks | `leo.frontend@northstar.example` | Member |
-| Ava Stone | `ava.backend@northstar.example` | Member |
-| Jules Rivera | `jules.design@northstar.example` | Member |
-| Sam Okafor | `sam.qa@northstar.example` | Member |
-| Iris Hayes | `iris.support@northstar.example` | Member |
+| Maya Chen | `owner@example.com` | Owner |
+| Eli Morgan | `admin@example.com` | Admin |
+| Nora Patel | `user@example.com` | Member |
+| Leo Brooks | `user2@example.com` | Member |
+| Ava Stone | `user3@example.com` | Member |
+| Jules Rivera | `user4@example.com` | Member |
+| Sam Okafor | `user5@example.com` | Member |
+| Iris Hayes | `user6@example.com` | Member |
 
 For two-user testing, open separate browser profiles or a regular and private window, then sign in as Maya and Eli. Use a Member account to test role-based permissions.
 
