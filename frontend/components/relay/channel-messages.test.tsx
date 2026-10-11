@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -123,6 +123,48 @@ describe("ChannelMessages", () => {
 
     expect(await screen.findByText(/history remains available/i)).toBeTruthy()
     expect(screen.queryByRole("textbox")).toBeNull()
+  })
+
+  it("keeps one socket across parent rerenders and uses the latest callbacks", async () => {
+    const userEvents = userEvent.setup()
+    const { handlers, socket } = mockSocket()
+    mockMessageHistory()
+    const originalActivity = vi.fn()
+    const latestActivity = vi.fn()
+    const { rerender, unmount } = render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} onActivity={originalActivity} onReadState={vi.fn()} onPresence={vi.fn()} />)
+    await screen.findByRole("log", { name: "Message history for #general" })
+
+    for (let index = 0; index < 5; index++) {
+      rerender(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={{ ...user }} onActivity={latestActivity} onReadState={vi.fn()} onPresence={vi.fn()} />)
+    }
+    await userEvents.type(screen.getByPlaceholderText("Message #general"), "Keep connected")
+    const incoming = message("stable-socket", "Still receiving updates", "2026-01-06T00:00:00.000Z")
+    act(() => handlers["message:new"]?.({ sequence: "10", message: incoming }))
+    expect(await screen.findByText("Still receiving updates")).toBeTruthy()
+    expect(latestActivity).toHaveBeenCalledWith({ type: "channel", id: "channel-active" }, incoming)
+    expect(originalActivity).not.toHaveBeenCalled()
+    expect(createRelaySocket).toHaveBeenCalledTimes(1)
+    expect(socket.disconnect).not.toHaveBeenCalled()
+
+    act(() => {
+      handlers.disconnect?.()
+      handlers.connect?.()
+    })
+    await waitFor(() => expect(socket.emit.mock.calls.filter(([event]) => event === "conversation:join")).toHaveLength(2))
+    expect(createRelaySocket).toHaveBeenCalledTimes(1)
+    unmount()
+    expect(socket.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it("replaces the socket when the conversation changes", async () => {
+    const { socket } = mockSocket()
+    mockMessageHistory()
+    const { rerender } = render(<ChannelMessages target={{ type: "channel", channel: channel(false) }} user={user} />)
+    await screen.findByRole("log", { name: "Message history for #general" })
+    rerender(<ChannelMessages target={{ type: "channel", channel: { ...channel(false), id: "channel-next", name: "next" } }} user={user} />)
+    expect(createRelaySocket).toHaveBeenCalledTimes(2)
+    expect(socket.disconnect).toHaveBeenCalledTimes(1)
+    expect(socket.emit).toHaveBeenCalledWith("conversation:join", { workspaceId: "workspace-1", conversation: { type: "channel", id: "channel-next" } }, expect.any(Function))
   })
 
   it("inserts an emoji selected from the composer palette", async () => {

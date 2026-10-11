@@ -399,6 +399,14 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
     }, 250)
   }, [synchronizeWorkspace])
 
+  // Parent callbacks and translations can change on presence/read updates.
+  // Socket handlers need their latest values without recreating the connection.
+  const synchronizeOnConnect = useEffectEvent(() => {
+    void synchronizeWorkspace().catch(() => undefined)
+  })
+  const synchronizeAfterSocketEvent = useEffectEvent(() => scheduleSynchronization())
+  const translateSocketError = useEffectEvent((code: string) => errors.code(code))
+
   async function loadInitial() {
     const request = ++initialRequest.current
     setHistoryState("loading")
@@ -440,10 +448,10 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       setSocketState("connected")
       socket.emit("conversation:join", joinEvent, (event) => {
         if ("ok" in event) {
-          void synchronizeWorkspace().catch(() => undefined)
+          synchronizeOnConnect()
           return
         }
-        setComposerError(errors.code(event.code))
+        setComposerError(translateSocketError(event.code))
       })
     }
 
@@ -456,35 +464,35 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       shouldScrollToBottom.current = true
       setMessages((current) => replaceMessage(current, event.message))
       reportActivity(event.message)
-      scheduleSynchronization()
+      synchronizeAfterSocketEvent()
     })
     socket.on("message:new", (event) => {
       if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
       shouldScrollToBottom.current = true
       setMessages((current) => mergeMessages(current, [event.message]))
       reportActivity(event.message)
-      scheduleSynchronization()
+      synchronizeAfterSocketEvent()
     })
     socket.on("message:update", (event) => {
       if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
       setMessages((current) => reconcileMessageUpdate(current, event.message))
-      scheduleSynchronization()
+      synchronizeAfterSocketEvent()
     })
     socket.on("message:delete", (event) => {
       if (target.type === "channel" ? event.message.channelId !== conversationId : event.message.directConversationId !== conversationId) return
       setMessages((current) => reconcileMessageUpdate(current, event.message))
-      scheduleSynchronization()
+      synchronizeAfterSocketEvent()
     })
     socket.on("reaction:update", (event) => {
       if (event.conversation.type !== target.type || event.conversation.id !== conversationId) return
       setMessages((current) => current.map((message) => message.id === event.messageId ? { ...message, reactions: event.reactions } : message))
-      scheduleSynchronization()
+      synchronizeAfterSocketEvent()
     })
     socket.on("conversation:read:update", (event) => {
       if (event.readState.conversation.type !== target.type || event.readState.conversation.id !== conversationId) return
       if (event.readState.userId === user.id) setLastReadMessageId(event.readState.lastReadMessageId)
       reportReadState(event.readState)
-      scheduleSynchronization()
+      synchronizeAfterSocketEvent()
     })
     socket.on("presence:update", (event) => reportPresence(event.userId, event.status))
     socket.on("presence:snapshot", (event) => {
@@ -499,15 +507,16 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
     })
     socket.on("message:error", (event) => {
       if (!event.operationId) {
-        setComposerError(errors.code(event.code))
+        setComposerError(translateSocketError(event.code))
         return
       }
       window.clearTimeout(pending.get(event.operationId))
       pending.delete(event.operationId)
+      const failureMessage = translateSocketError(event.code)
       setMessages((current) => current.map((message) => message.operationId === event.operationId ? {
         ...message,
         delivery: "failed",
-        failureMessage: errors.code(event.code),
+        failureMessage,
       } : message))
     })
 
@@ -522,7 +531,7 @@ export function ChannelMessages({ onActivity, onAddDescription, onInvitePeople, 
       socket.disconnect()
       socketRef.current = null
     }
-  }, [archived, conversationId, errors, scheduleSynchronization, synchronizeWorkspace, workspaceId, target.type, user.id])
+  }, [archived, conversationId, workspaceId, target.type, user.id])
 
   useEffect(() => {
     if (historyState !== "ready" || messages.length === 0) return
