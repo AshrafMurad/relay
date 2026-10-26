@@ -26,7 +26,16 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 *.swp
-.impeccable/
+
+# internal project and agent documentation
+/docs/
+/AGENTS.md
+/DESIGN.md
+/PRODUCT.md
+/.opencode/
+/.impeccable/
+/frontend/AGENTS.md
+/frontend/CLAUDE.md
 
 # TypeScript
 *.tsbuildinfo
